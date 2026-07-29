@@ -20,9 +20,10 @@ O indexador do Azure AI Search extrai o texto dos documentos. A API não precisa
 A página inicial oferece o fluxo completo do MVP:
 
 1. seleção e upload de PDF, DOCX ou TXT;
-2. acompanhamento automático até o documento ser indexado;
-3. pesquisa textual com score, metadados e trechos destacados;
-4. layout responsivo para desktop e celular.
+2. upload em lote de até 100 documentos dentro de um ZIP;
+3. acompanhamento automático até os documentos serem indexados;
+4. pesquisa textual com score, metadados e trechos destacados;
+5. layout responsivo para desktop e celular.
 
 O projeto usa **Blazor Web App com Interactive Server**. Os componentes rodam no servidor por uma conexão SignalR e reutilizam diretamente os serviços da camada de aplicação. Isso mantém a UI e a API no mesmo deploy, sem CORS e sem um segundo Container App.
 
@@ -31,6 +32,7 @@ O projeto usa **Blazor Web App com Interactive Server**. Os componentes rodam no
 O arquivo `infra/main.bicep` cria:
 
 - Storage Account e container privado `documents`;
+- container privado `batch-status` para persistir o progresso dos lotes;
 - Azure AI Search Basic com autenticação exclusiva por Microsoft Entra ID;
 - Azure Container Registry;
 - Azure Container Apps Environment e Container App;
@@ -166,6 +168,24 @@ curl.exe "https://SUA-API/api/search?q=cláusula&page=1&pageSize=20"
 
 Os resultados incluem score, highlights e metadados do arquivo. O analisador do campo `content` é `pt-BR`.
 
+### Upload em lote
+
+```powershell
+curl.exe -X POST "https://SUA-API/api/batches" `
+  -F "file=@C:\documentos\pacote.zip;type=application/zip"
+```
+
+O ZIP pode ter até 100 MB e conter no máximo 100 documentos, totalizando até
+250 MB depois da descompactação. Cada documento mantém o limite individual de
+25 MB. ZIPs aninhados, extensões diferentes de PDF, DOCX e TXT e entradas com
+taxa de compressão suspeita são rejeitados.
+
+Consulte o progresso usando o `statusUrl` retornado:
+
+```powershell
+curl.exe "https://SUA-API/api/batches/ID-DO-LOTE/status"
+```
+
 ## Validar o projeto
 
 ```powershell
@@ -184,6 +204,7 @@ Variáveis de ambiente usam a convenção do ASP.NET Core:
 | `Azure__StorageResourceId` | `/subscriptions/.../storageAccounts/conta` |
 | `Azure__SearchEndpoint` | `https://servico.search.windows.net` |
 | `Azure__ContainerName` | `documents` |
+| `Azure__BatchContainerName` | `batch-status` |
 | `Azure__IndexName` | `documents-index` |
 | `Azure__IndexerName` | `documents-blob-indexer` |
 | `Azure__MaximumUploadBytes` | `26214400` |
@@ -194,6 +215,7 @@ Variáveis de ambiente usam a convenção do ASP.NET Core:
 - busca textual, sem embeddings ou Azure OpenAI;
 - API pública sem autenticação de usuário;
 - limite padrão de 25 MB por arquivo;
+- limite de 100 arquivos por ZIP, 100 MB compactado e 250 MB descompactado;
 - PDF, DOCX e TXT;
 - endpoints para upload, status e pesquisa, sem exclusão ou download.
 

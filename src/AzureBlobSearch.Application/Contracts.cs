@@ -11,6 +11,11 @@ public sealed record UploadAccepted(
     string FileName,
     string StatusUrl);
 
+public sealed record UploadBatch(
+    Stream Content,
+    string FileName,
+    long Length);
+
 public enum DocumentState
 {
     Pending,
@@ -23,6 +28,49 @@ public sealed record DocumentStatus(
     DocumentState State,
     string? ErrorMessage,
     DateTimeOffset? LastIndexerRun);
+
+public enum BatchState
+{
+    Uploading,
+    Indexing,
+    Indexed,
+    PartiallyFailed,
+    Failed
+}
+
+public enum BatchItemState
+{
+    Pending,
+    Indexed,
+    Rejected,
+    Failed
+}
+
+public sealed record BatchItemStatus(
+    string FileName,
+    string? DocumentId,
+    BatchItemState State,
+    string? ErrorMessage);
+
+public sealed record BatchStatus(
+    string BatchId,
+    string FileName,
+    BatchState State,
+    int Total,
+    int Uploaded,
+    int Indexed,
+    int Rejected,
+    int Failed,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<BatchItemStatus> Items);
+
+public sealed record BatchAccepted(
+    string BatchId,
+    int Total,
+    int Uploaded,
+    int Rejected,
+    BatchState State,
+    string StatusUrl);
 
 public sealed record SearchHit(
     string DocumentId,
@@ -61,8 +109,19 @@ public interface IDocumentSearchService
         CancellationToken cancellationToken);
 }
 
+public interface IBatchDocumentService
+{
+    Task<BatchAccepted> UploadBatchAsync(
+        UploadBatch batch,
+        string statusUrl,
+        CancellationToken cancellationToken);
+
+    Task<BatchStatus> GetBatchStatusAsync(
+        string batchId,
+        CancellationToken cancellationToken);
+}
+
 public interface IReadinessService
 {
     Task CheckAsync(CancellationToken cancellationToken);
 }
-

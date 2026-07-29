@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @inject IDocumentService DocumentService
+@inject IBatchDocumentService BatchService
 @inject IDocumentSearchService SearchService
 @implements IDisposable
 
@@ -33,13 +34,25 @@
         <div class="panel-heading">
             <div>
                 <p class="step-label">01 · Alimentar a busca</p>
-                <h2>Adicionar documento</h2>
+                <h2>@(uploadMode == UploadMode.Single ? "Adicionar documento" : "Enviar pacote ZIP")</h2>
             </div>
-            <span class="file-limit">até 25 MB</span>
+            <span class="file-limit">até @(uploadMode == UploadMode.Single ? "25 MB" : "100 MB")</span>
+        </div>
+
+        <div class="upload-mode" role="group" aria-label="Modo de upload">
+            <button type="button" class="@(uploadMode == UploadMode.Single ? "active" : null)"
+                    @onclick="() => SetUploadMode(UploadMode.Single)">
+                Arquivo único
+            </button>
+            <button type="button" class="@(uploadMode == UploadMode.Batch ? "active" : null)"
+                    @onclick="() => SetUploadMode(UploadMode.Batch)">
+                Pacote ZIP
+                <span>novo</span>
+            </button>
         </div>
 
         <label class="drop-zone @(selectedFile is not null ? "has-file" : null)">
-            <InputFile OnChange="SelectFile" accept=".pdf,.docx,.txt" />
+            <InputFile @key="uploadMode" OnChange="SelectFile" accept="@AcceptedExtensions" />
             <span class="upload-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                     <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
@@ -47,9 +60,9 @@
             </span>
             @if (selectedFile is null)
             {
-                <strong>Escolha um arquivo</strong>
+                <strong>@(uploadMode == UploadMode.Single ? "Escolha um arquivo" : "Escolha um pacote ZIP")</strong>
                 <span>ou arraste para esta área</span>
-                <small>PDF, DOCX ou TXT</small>
+                <small>@(uploadMode == UploadMode.Single ? "PDF, DOCX ou TXT" : "Até 100 documentos por lote")</small>
             }
             else
             {
@@ -64,11 +77,11 @@
             @if (isUploading)
             {
                 <span class="spinner" aria-hidden="true"></span>
-                <span>Enviando e indexando…</span>
+                <span>@(uploadMode == UploadMode.Single ? "Enviando e indexando…" : "Descompactando e enviando…")</span>
             }
             else
             {
-                <span>Enviar para o Azure</span>
+                <span>@(uploadMode == UploadMode.Single ? "Enviar para o Azure" : "Processar lote no Azure")</span>
                 <span aria-hidden="true">↗</span>
             }
         </button>
@@ -81,6 +94,40 @@
                     <strong>@StatusTitle(documentStatus.State)</strong>
                     <span>@StatusDescription(documentStatus.State)</span>
                 </div>
+            </div>
+        }
+
+        @if (batchStatus is not null)
+        {
+            <div class="batch-summary @BatchStatusClass(batchStatus.State)" role="status">
+                <div class="batch-progress-heading">
+                    <div>
+                        <strong>@BatchStatusTitle(batchStatus.State)</strong>
+                        <span>@batchStatus.Indexed de @batchStatus.Uploaded indexados</span>
+                    </div>
+                    <b>@BatchProgress(batchStatus)%</b>
+                </div>
+                <div class="progress-track">
+                    <span style="width: @(BatchProgress(batchStatus))%"></span>
+                </div>
+                <div class="batch-counts">
+                    <span><i class="ok"></i>@batchStatus.Uploaded enviados</span>
+                    <span><i class="warn"></i>@batchStatus.Rejected rejeitados</span>
+                    <span><i class="bad"></i>@batchStatus.Failed falharam</span>
+                </div>
+                <details>
+                    <summary>Ver arquivos do lote</summary>
+                    <div class="batch-items">
+                        @foreach (var item in batchStatus.Items)
+                        {
+                            <div>
+                                <span class="item-state @item.State.ToString().ToLowerInvariant()"></span>
+                                <strong>@item.FileName</strong>
+                                <small>@BatchItemLabel(item)</small>
+                            </div>
+                        }
+                    </div>
+                </details>
             </div>
         }
 
@@ -203,28 +250,59 @@
 
 @code {
     private const long MaximumFileSize = 25 * 1024 * 1024;
+    private const long MaximumBatchSize = 100 * 1024 * 1024;
     private readonly CancellationTokenSource cancellation = new();
     private IBrowserFile? selectedFile;
     private DocumentStatus? documentStatus;
+    private BatchStatus? batchStatus;
     private SearchPage? searchResult;
+    private UploadMode uploadMode;
     private string query = string.Empty;
     private string? uploadError;
     private string? searchError;
     private bool isUploading;
     private bool isSearching;
 
+    private long CurrentMaximumSize =>
+        uploadMode == UploadMode.Single ? MaximumFileSize : MaximumBatchSize;
+
+    private string AcceptedExtensions =>
+        uploadMode == UploadMode.Single ? ".pdf,.docx,.txt" : ".zip";
+
+    private void SetUploadMode(UploadMode mode)
+    {
+        uploadMode = mode;
+        selectedFile = null;
+        documentStatus = null;
+        batchStatus = null;
+        uploadError = null;
+    }
+
     private void SelectFile(InputFileChangeEventArgs args)
     {
         selectedFile = args.File;
         documentStatus = null;
-        uploadError = selectedFile.Size > MaximumFileSize
-            ? "O arquivo ultrapassa o limite de 25 MB."
-            : null;
+        batchStatus = null;
+
+        var expectedExtension = uploadMode == UploadMode.Single
+            ? new[] { ".pdf", ".docx", ".txt" }
+            : new[] { ".zip" };
+        var extension = Path.GetExtension(selectedFile.Name);
+
+        uploadError = !expectedExtension.Contains(extension, StringComparer.OrdinalIgnoreCase)
+            ? uploadMode == UploadMode.Single
+                ? "Escolha um arquivo PDF, DOCX ou TXT."
+                : "Escolha um pacote com extensão ZIP."
+            : selectedFile.Size > CurrentMaximumSize
+                ? $"O arquivo ultrapassa o limite de {FormatSize(CurrentMaximumSize)}."
+                : null;
     }
 
     private async Task UploadAsync()
     {
-        if (selectedFile is null || selectedFile.Size > MaximumFileSize)
+        if (selectedFile is null
+            || selectedFile.Size > CurrentMaximumSize
+            || !string.IsNullOrWhiteSpace(uploadError))
         {
             return;
         }
@@ -232,10 +310,26 @@
         isUploading = true;
         uploadError = null;
         documentStatus = null;
+        batchStatus = null;
 
         try
         {
-            await using var stream = selectedFile.OpenReadStream(MaximumFileSize, cancellation.Token);
+            await using var stream = selectedFile.OpenReadStream(CurrentMaximumSize, cancellation.Token);
+
+            if (uploadMode == UploadMode.Batch)
+            {
+                var acceptedBatch = await BatchService.UploadBatchAsync(
+                    new UploadBatch(stream, selectedFile.Name, selectedFile.Size),
+                    "/api/batches/{batchId}/status",
+                    cancellation.Token);
+
+                batchStatus = await BatchService.GetBatchStatusAsync(
+                    acceptedBatch.BatchId,
+                    cancellation.Token);
+                await PollBatchStatusAsync(acceptedBatch.BatchId);
+                return;
+            }
+
             var accepted = await DocumentService.UploadAsync(
                 new UploadDocument(
                     stream,
@@ -263,6 +357,21 @@
         finally
         {
             isUploading = false;
+        }
+    }
+
+    private async Task PollBatchStatusAsync(string batchId)
+    {
+        for (var attempt = 0; attempt < 45; attempt++)
+        {
+            batchStatus = await BatchService.GetBatchStatusAsync(batchId, cancellation.Token);
+
+            if (batchStatus.State is not BatchState.Indexing and not BatchState.Uploading)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellation.Token);
         }
     }
 
@@ -333,6 +442,36 @@
         _ => "O Azure está extraindo e organizando o texto."
     };
 
+    private static string BatchStatusClass(BatchState state) => state switch
+    {
+        BatchState.Indexed => "success",
+        BatchState.PartiallyFailed => "partial",
+        BatchState.Failed => "error",
+        _ => "pending"
+    };
+
+    private static string BatchStatusTitle(BatchState state) => state switch
+    {
+        BatchState.Indexed => "Lote totalmente indexado",
+        BatchState.PartiallyFailed => "Lote concluído com ressalvas",
+        BatchState.Failed => "Não foi possível concluir o lote",
+        BatchState.Uploading => "Enviando documentos",
+        _ => "Indexando o lote"
+    };
+
+    private static int BatchProgress(BatchStatus status) =>
+        status.Uploaded == 0
+            ? status.State == BatchState.Failed ? 100 : 0
+            : (int)Math.Round(status.Indexed * 100d / status.Uploaded);
+
+    private static string BatchItemLabel(BatchItemStatus item) => item.State switch
+    {
+        BatchItemState.Indexed => "Indexado",
+        BatchItemState.Rejected => item.ErrorMessage ?? "Rejeitado",
+        BatchItemState.Failed => item.ErrorMessage ?? "Falhou",
+        _ => "Aguardando índice"
+    };
+
     private static string FormatSize(long bytes) => bytes switch
     {
         >= 1_048_576 => $"{bytes / 1_048_576d:0.0} MB",
@@ -361,5 +500,11 @@
     {
         cancellation.Cancel();
         cancellation.Dispose();
+    }
+
+    private enum UploadMode
+    {
+        Single,
+        Batch
     }
 }

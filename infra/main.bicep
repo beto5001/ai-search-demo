@@ -27,6 +27,7 @@ var containerAppName = '${namePrefix}-api'
 var identityName = '${namePrefix}-api-identity'
 var logName = '${namePrefix}-logs'
 var containerName = 'documents'
+var batchContainerName = 'batch-status'
 
 var storageBlobDataReaderRoleId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
@@ -87,6 +88,14 @@ resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01'
 resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
   parent: blobService
   name: containerName
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource batchStatusContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: batchContainerName
   properties: {
     publicAccess: 'None'
   }
@@ -166,6 +175,16 @@ resource searchStorageReader 'Microsoft.Authorization/roleAssignments@2022-04-01
 resource appStorageContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(documentsContainer.id, appIdentity.id, storageBlobDataContributorRoleId)
   scope: documentsContainer
+  properties: {
+    principalId: appIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: storageBlobDataContributorRoleId
+  }
+}
+
+resource appBatchStorageContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(batchStatusContainer.id, appIdentity.id, storageBlobDataContributorRoleId)
+  scope: batchStatusContainer
   properties: {
     principalId: appIdentity.properties.principalId
     principalType: 'ServicePrincipal'
@@ -266,6 +285,10 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: containerName
             }
             {
+              name: 'Azure__BatchContainerName'
+              value: batchContainerName
+            }
+            {
               name: 'Azure__ManagedIdentityClientId'
               value: appIdentity.properties.clientId
             }
@@ -306,6 +329,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
   }
   dependsOn: [
     appStorageContributor
+    appBatchStorageContributor
     appSearchServiceContributor
     appSearchDataContributor
     appSearchDataReader

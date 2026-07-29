@@ -12,6 +12,8 @@ public sealed class AzureServicesOptions
 
     public string ContainerName { get; init; } = "documents";
 
+    public string BatchContainerName { get; init; } = "batch-status";
+
     public string IndexName { get; init; } = "documents-index";
 
     public string DataSourceName { get; init; } = "documents-blob-datasource";
@@ -22,4 +24,3 @@ public sealed class AzureServicesOptions
 
     public string? ManagedIdentityClientId { get; init; }
 }
-

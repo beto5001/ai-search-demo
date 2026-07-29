@@ -28,6 +28,10 @@ public sealed partial class ApiExceptionMiddleware(
                 (StatusCodes.Status413PayloadTooLarge, "Arquivo muito grande", exception.Message),
             DocumentValidationException or SearchValidationException =>
                 (StatusCodes.Status400BadRequest, "Requisição inválida", exception.Message),
+            InvalidDataException or OverflowException =>
+                (StatusCodes.Status400BadRequest, "ZIP inválido", "O pacote ZIP está corrompido ou possui metadados inválidos."),
+            KeyNotFoundException =>
+                (StatusCodes.Status404NotFound, "Lote não encontrado", exception.Message),
             RequestFailedException requestFailed when requestFailed.Status == 429 =>
                 (StatusCodes.Status429TooManyRequests, "Limite do Azure atingido", requestFailed.Message),
             RequestFailedException =>

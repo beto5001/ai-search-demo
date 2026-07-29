@@ -289,6 +289,44 @@ button, a, label {
     font-size: .76rem;
 }
 
+.upload-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+    margin: -5px 0 15px;
+    padding: 4px;
+    border-radius: 11px;
+    background: #eceee8;
+}
+
+.upload-mode button {
+    min-height: 35px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.upload-mode button.active {
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: 0 3px 10px rgba(23, 32, 28, .08);
+}
+
+.upload-mode button span {
+    margin-left: 4px;
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: var(--acid);
+    color: var(--ink);
+    font-size: .54rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
 .drop-zone {
     position: relative;
     min-height: 205px;
@@ -417,6 +455,145 @@ button, a, label {
 
 .notice.error .notice-dot {
     background: var(--danger);
+}
+
+.batch-summary {
+    margin-top: 14px;
+    padding: 15px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #f4f5f0;
+}
+
+.batch-summary.success {
+    border-color: rgba(111, 152, 32, .3);
+    background: rgba(201, 243, 107, .14);
+}
+
+.batch-summary.partial {
+    border-color: rgba(180, 140, 42, .3);
+    background: rgba(180, 140, 42, .08);
+}
+
+.batch-summary.error {
+    border-color: rgba(184, 71, 53, .25);
+    background: rgba(184, 71, 53, .07);
+}
+
+.batch-progress-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.batch-progress-heading div {
+    display: grid;
+    gap: 2px;
+}
+
+.batch-progress-heading strong {
+    font-size: .81rem;
+}
+
+.batch-progress-heading span {
+    color: var(--muted);
+    font-size: .68rem;
+}
+
+.batch-progress-heading b {
+    color: var(--acid-dark);
+    font-family: "Manrope", sans-serif;
+    font-size: .83rem;
+}
+
+.progress-track {
+    height: 6px;
+    margin: 11px 0;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(23, 32, 28, .1);
+}
+
+.progress-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--acid-dark);
+    transition: width .35s ease;
+}
+
+.batch-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    color: var(--muted);
+    font-size: .62rem;
+}
+
+.batch-counts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.batch-counts i, .item-state {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9ca39f;
+}
+
+.batch-counts .ok, .item-state.indexed {
+    background: #79aa2b;
+}
+
+.batch-counts .warn, .item-state.rejected {
+    background: #b48c2a;
+}
+
+.batch-counts .bad, .item-state.failed {
+    background: var(--danger);
+}
+
+.batch-summary details {
+    margin-top: 11px;
+    border-top: 1px solid rgba(23, 32, 28, .1);
+}
+
+.batch-summary summary {
+    padding-top: 10px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .68rem;
+    font-weight: 700;
+}
+
+.batch-items {
+    display: grid;
+    gap: 7px;
+    max-height: 170px;
+    margin-top: 9px;
+    overflow-y: auto;
+}
+
+.batch-items > div {
+    display: grid;
+    grid-template-columns: 7px minmax(0, 1fr);
+    align-items: center;
+    gap: 2px 7px;
+    font-size: .67rem;
+}
+
+.batch-items strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.batch-items small {
+    grid-column: 2;
+    color: var(--muted);
 }
 
 .search-panel {

@@ -7,6 +7,10 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 110 * 1024 * 1024;
+});
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
@@ -19,7 +23,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 30 * 1024 * 1024;
+    options.MultipartBodyLengthLimit = 110 * 1024 * 1024;
 });
 builder.Services.AddAzureBlobSearch(builder.Configuration);
 
@@ -63,6 +67,39 @@ app.MapGet("/api/documents/{documentId}/status", async (
 })
 .WithName("GetDocumentStatus")
 .WithSummary("Consulta o estado da indexação");
+
+app.MapPost("/api/batches", async (
+    IFormFile file,
+    IBatchDocumentService batchService,
+    CancellationToken cancellationToken) =>
+{
+    await using var stream = file.OpenReadStream();
+    var accepted = await batchService.UploadBatchAsync(
+        new UploadBatch(stream, file.FileName, file.Length),
+        "/api/batches/{batchId}/status",
+        cancellationToken);
+
+    return Results.Accepted(accepted.StatusUrl, accepted);
+})
+.WithName("UploadBatch")
+.WithSummary("Descompacta um ZIP e envia PDF, DOCX e TXT em lote")
+.DisableAntiforgery();
+
+app.MapGet("/api/batches/{batchId}/status", async (
+    string batchId,
+    IBatchDocumentService batchService,
+    CancellationToken cancellationToken) =>
+{
+    if (batchId.Length != 32 || batchId.Any(character => !Uri.IsHexDigit(character)))
+    {
+        throw new DocumentValidationException("O identificador do lote é inválido.");
+    }
+
+    var status = await batchService.GetBatchStatusAsync(batchId, cancellationToken);
+    return Results.Ok(status);
+})
+.WithName("GetBatchStatus")
+.WithSummary("Consulta o progresso de um lote ZIP");
 
 app.MapGet("/api/search", async (
     string q,

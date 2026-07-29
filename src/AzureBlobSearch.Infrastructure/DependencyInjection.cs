@@ -66,6 +66,7 @@ public static class DependencyInjection
 
         services.AddSingleton<AzureDocumentService>();
         services.AddSingleton<IDocumentService>(provider => provider.GetRequiredService<AzureDocumentService>());
+        services.AddSingleton<IBatchDocumentService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddSingleton<IDocumentSearchService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddSingleton<IReadinessService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddHostedService<SearchBootstrapper>();
