@@ -36,7 +36,7 @@ Nenhuma chave de Storage ou Search é armazenada pela aplicação.
 - extensão Container Apps do Azure CLI;
 - permissão `Owner` ou `User Access Administrator` + `Contributor` na assinatura/resource group, pois o Bicep cria role assignments.
 
-O Docker local é opcional: `az acr build` faz o build da imagem dentro do Azure.
+O Docker local não é necessário: o .NET 10 constrói a imagem OCI e a envia diretamente ao Azure Container Registry.
 
 ## 1. Instalar e autenticar o Azure CLI
 
@@ -72,7 +72,7 @@ O script:
 
 1. cria o resource group;
 2. implanta o Bicep;
-3. constrói a imagem no Azure Container Registry;
+3. constrói a imagem OCI com o .NET 10 e a envia ao Azure Container Registry;
 4. publica a imagem na Container App;
 5. mostra a URL HTTPS da API e do OpenAPI.
 
@@ -189,4 +189,3 @@ Antes de produção, adicione Microsoft Entra ID na API, rede privada, política
 ## Licença
 
 [MIT](LICENSE)
-

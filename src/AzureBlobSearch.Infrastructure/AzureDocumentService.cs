@@ -116,12 +116,12 @@ public sealed class AzureDocumentService(
             QueryType = SearchQueryType.Simple,
             SearchMode = SearchMode.Any
         };
-        searchOptions.HighlightFields.Add("content");
-        searchOptions.Select.Add("id");
-        searchOptions.Select.Add("fileName");
-        searchOptions.Select.Add("contentType");
-        searchOptions.Select.Add("size");
-        searchOptions.Select.Add("lastModified");
+        searchOptions.HighlightFields.Add("Content");
+        searchOptions.Select.Add("Id");
+        searchOptions.Select.Add("FileName");
+        searchOptions.Select.Add("ContentType");
+        searchOptions.Select.Add("Size");
+        searchOptions.Select.Add("LastModified");
 
         var response = await searchClient.SearchAsync<SearchDocument>(
             query.Trim(),
@@ -133,13 +133,13 @@ public sealed class AzureDocumentService(
         {
             var document = result.Document;
             hits.Add(new SearchHit(
-                GetValue<string>(document, "id") ?? string.Empty,
-                GetValue<string>(document, "fileName") ?? "sem-nome",
-                GetValue<string>(document, "contentType"),
-                GetValue<long?>(document, "size"),
-                GetValue<DateTimeOffset?>(document, "lastModified"),
+                GetValue<string>(document, "Id") ?? string.Empty,
+                GetValue<string>(document, "FileName") ?? "sem-nome",
+                GetValue<string>(document, "ContentType"),
+                GetValue<long?>(document, "Size"),
+                GetValue<DateTimeOffset?>(document, "LastModified"),
                 result.Score,
-                result.Highlights.TryGetValue("content", out var highlights)
+                result.Highlights.TryGetValue("Content", out var highlights)
                     ? highlights.ToArray()
                     : []));
         }
@@ -171,9 +171,29 @@ public sealed class AzureDocumentService(
             return typed;
         }
 
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+
+        if (targetType == typeof(DateTimeOffset))
+        {
+            if (value is DateTime dateTime)
+            {
+                return (T?)(object)new DateTimeOffset(dateTime);
+            }
+
+            if (value is string dateText
+                && DateTimeOffset.TryParse(
+                    dateText,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal,
+                    out var dateTimeOffset))
+            {
+                return (T?)(object)dateTimeOffset;
+            }
+        }
+
         return (T?)Convert.ChangeType(
             value,
-            Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T),
+            targetType,
             System.Globalization.CultureInfo.InvariantCulture);
     }
 }

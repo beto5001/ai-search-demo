@@ -66,27 +66,27 @@ public sealed partial class SearchBootstrapper(
 
         indexer.FieldMappings.Add(new FieldMapping("documentid")
         {
-            TargetFieldName = "id"
+            TargetFieldName = "Id"
         });
         indexer.FieldMappings.Add(new FieldMapping("originalfilename")
         {
-            TargetFieldName = "fileName"
+            TargetFieldName = "FileName"
         });
         indexer.FieldMappings.Add(new FieldMapping("metadata_content_type")
         {
-            TargetFieldName = "contentType"
+            TargetFieldName = "ContentType"
         });
         indexer.FieldMappings.Add(new FieldMapping("metadata_storage_size")
         {
-            TargetFieldName = "size"
+            TargetFieldName = "Size"
         });
         indexer.FieldMappings.Add(new FieldMapping("metadata_storage_last_modified")
         {
-            TargetFieldName = "lastModified"
+            TargetFieldName = "LastModified"
         });
         indexer.FieldMappings.Add(new FieldMapping("metadata_storage_path")
         {
-            TargetFieldName = "storagePath"
+            TargetFieldName = "StoragePath"
         });
 
         await searchIndexerClient.CreateOrUpdateIndexerAsync(

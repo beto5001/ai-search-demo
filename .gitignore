@@ -11,4 +11,4 @@ coverage/
 .env
 appsettings.Local.json
 infra/*.parameters.local.json
-
+.deployment/

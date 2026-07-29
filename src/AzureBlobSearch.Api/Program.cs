@@ -2,11 +2,18 @@ using AzureBlobSearch.Api;
 using AzureBlobSearch.Application;
 using AzureBlobSearch.Infrastructure;
 using Microsoft.AspNetCore.Http.Features;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(
+        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+});
 builder.Services.Configure<FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 30 * 1024 * 1024;
@@ -91,4 +98,3 @@ app.MapGet("/health/ready", async (
 app.Run();
 
 public partial class Program;
-
