@@ -1,4 +1,5 @@
 using AzureBlobSearch.Api;
+using AzureBlobSearch.Api.Components;
 using AzureBlobSearch.Application;
 using AzureBlobSearch.Infrastructure;
 using Microsoft.AspNetCore.Http.Features;
@@ -9,6 +10,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(
@@ -22,15 +25,10 @@ builder.Services.AddAzureBlobSearch(builder.Configuration);
 
 var app = builder.Build();
 
+app.UseStaticFiles();
+app.UseAntiforgery();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.MapOpenApi();
-
-app.MapGet("/", () => Results.Ok(new
-{
-    service = "Azure Blob Search API",
-    version = "v1",
-    documentation = "/openapi/v1.json"
-}));
 
 app.MapPost("/api/documents", async (
     IFormFile file,
@@ -94,6 +92,9 @@ app.MapGet("/health/ready", async (
     return Results.Ok(new { status = "healthy" });
 })
 .ExcludeFromDescription();
+
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
 
 app.Run();
 

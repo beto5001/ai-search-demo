@@ -1,12 +1,12 @@
 # Azure Blob Search MVP
 
-Web API em **.NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo extraído pelo Azure AI Search.
+Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo extraído pelo Azure AI Search. Inclui interface web responsiva e API HTTP documentada com OpenAPI.
 
 ## Arquitetura
 
 ```mermaid
 flowchart LR
-    Client[Cliente HTTP] -->|multipart upload| API[ASP.NET Core API]
+    Client[Blazor no navegador] --> API[ASP.NET Core API]
     API -->|Managed Identity| Blob[(Blob Storage)]
     API -->|inicia indexador e consulta| Search[Azure AI Search]
     Search -->|Managed Identity| Blob
@@ -14,6 +14,17 @@ flowchart LR
 ```
 
 O indexador do Azure AI Search extrai o texto dos documentos. A API não precisa baixar PDFs nem executar bibliotecas locais de parsing.
+
+## Interface Blazor
+
+A página inicial oferece o fluxo completo do MVP:
+
+1. seleção e upload de PDF, DOCX ou TXT;
+2. acompanhamento automático até o documento ser indexado;
+3. pesquisa textual com score, metadados e trechos destacados;
+4. layout responsivo para desktop e celular.
+
+O projeto usa **Blazor Web App com Interactive Server**. Os componentes rodam no servidor por uma conexão SignalR e reutilizam diretamente os serviços da camada de aplicação. Isso mantém a UI e a API no mesmo deploy, sem CORS e sem um segundo Container App.
 
 ## Recursos criados
 
@@ -117,6 +128,8 @@ dotnet run --project .\src\AzureBlobSearch.Api
 A aplicação usa `DefaultAzureCredential`. Localmente, ela aproveita o login do Azure CLI ou do Visual Studio; na Container App, usa a identidade gerenciada configurada pelo Bicep.
 
 ## Usar a API
+
+A interface está disponível na raiz da URL publicada. Os endpoints abaixo continuam acessíveis para integrações e testes automatizados.
 
 ### Upload
 

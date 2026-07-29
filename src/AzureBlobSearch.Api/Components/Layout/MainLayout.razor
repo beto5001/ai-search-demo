@@ -1,0 +1,36 @@
+@inherits LayoutComponentBase
+
+<div class="page-shell">
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Nebula Search — início">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" role="img">
+                    <path d="M7 9.5 16 4l9 5.5v11L16 26l-9-5.5Z" />
+                    <path d="m11 12 5-3 5 3v6l-5 3-5-3Z" />
+                </svg>
+            </span>
+            <span>Nebula <strong>Search</strong></span>
+        </a>
+
+        <nav class="topnav" aria-label="Links do projeto">
+            <a href="/openapi/v1.json" target="_blank">API</a>
+            <a href="https://github.com/beto5001/ai-search-demo" target="_blank">GitHub</a>
+            <span class="status-pill"><i></i> Azure online</span>
+        </nav>
+    </header>
+
+    <main>
+        @Body
+    </main>
+
+    <footer>
+        <span>Construído com Blazor + .NET 10</span>
+        <span>Azure AI Search · Blob Storage</span>
+    </footer>
+</div>
+
+<div id="blazor-error-ui">
+    Ocorreu um erro inesperado.
+    <a href="" class="reload">Recarregar</a>
+    <button class="dismiss" type="button">×</button>
+</div>

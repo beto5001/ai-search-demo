@@ -1,0 +1,365 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IDocumentService DocumentService
+@inject IDocumentSearchService SearchService
+@implements IDisposable
+
+<PageTitle>Nebula Search — encontre qualquer coisa nos seus arquivos</PageTitle>
+
+<section class="hero">
+    <div class="hero-copy">
+        <p class="eyebrow"><span></span> Busca documental inteligente</p>
+        <h1>Seus arquivos,<br /><em>finalmente encontráveis.</em></h1>
+        <p class="hero-description">
+            Envie PDFs, documentos ou textos. Nós cuidamos da extração,
+            indexação e busca — em segundos.
+        </p>
+    </div>
+    <div class="hero-orbit" aria-hidden="true">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="core">
+            <svg viewBox="0 0 48 48">
+                <path d="m13 14 11-7 11 7v14l-11 7-11-7Z" />
+                <circle cx="24" cy="21" r="6" />
+                <path d="m28.5 25.5 6 6" />
+            </svg>
+        </div>
+    </div>
+</section>
+
+<section class="workspace" aria-label="Área de documentos">
+    <div class="panel upload-panel">
+        <div class="panel-heading">
+            <div>
+                <p class="step-label">01 · Alimentar a busca</p>
+                <h2>Adicionar documento</h2>
+            </div>
+            <span class="file-limit">até 25 MB</span>
+        </div>
+
+        <label class="drop-zone @(selectedFile is not null ? "has-file" : null)">
+            <InputFile OnChange="SelectFile" accept=".pdf,.docx,.txt" />
+            <span class="upload-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+                </svg>
+            </span>
+            @if (selectedFile is null)
+            {
+                <strong>Escolha um arquivo</strong>
+                <span>ou arraste para esta área</span>
+                <small>PDF, DOCX ou TXT</small>
+            }
+            else
+            {
+                <strong>@selectedFile.Name</strong>
+                <span>@FormatSize(selectedFile.Size)</span>
+                <small>Clique para escolher outro</small>
+            }
+        </label>
+
+        <button class="primary-button" type="button" @onclick="UploadAsync"
+                disabled="@(selectedFile is null || isUploading)">
+            @if (isUploading)
+            {
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Enviando e indexando…</span>
+            }
+            else
+            {
+                <span>Enviar para o Azure</span>
+                <span aria-hidden="true">↗</span>
+            }
+        </button>
+
+        @if (documentStatus is not null)
+        {
+            <div class="notice @StatusClass(documentStatus.State)" role="status">
+                <span class="notice-dot"></span>
+                <div>
+                    <strong>@StatusTitle(documentStatus.State)</strong>
+                    <span>@StatusDescription(documentStatus.State)</span>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(uploadError))
+        {
+            <div class="notice error" role="alert">
+                <span class="notice-dot"></span>
+                <div>
+                    <strong>Não foi possível enviar</strong>
+                    <span>@uploadError</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="panel search-panel">
+        <div class="panel-heading">
+            <div>
+                <p class="step-label">02 · Encontrar respostas</p>
+                <h2>Pesquisar conteúdo</h2>
+            </div>
+            @if (searchResult is not null)
+            {
+                <span class="result-count">@searchResult.Total resultado(s)</span>
+            }
+        </div>
+
+        <form class="search-box" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5" />
+                <path d="m16 16 4 4" />
+            </svg>
+            <input @bind="query" @bind:event="oninput"
+                   placeholder="O que você quer encontrar?" aria-label="Termo de pesquisa" />
+            <button type="submit" disabled="@(isSearching || string.IsNullOrWhiteSpace(query))">
+                @if (isSearching)
+                {
+                    <span class="spinner dark" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <span>Buscar</span>
+                }
+            </button>
+        </form>
+
+        <div class="search-content">
+            @if (!string.IsNullOrWhiteSpace(searchError))
+            {
+                <div class="notice error" role="alert">
+                    <span class="notice-dot"></span>
+                    <div>
+                        <strong>A busca não respondeu</strong>
+                        <span>@searchError</span>
+                    </div>
+                </div>
+            }
+            else if (searchResult is null)
+            {
+                <div class="empty-results">
+                    <span class="empty-glyph">⌕</span>
+                    <strong>Pronto quando você estiver</strong>
+                    <p>Pesquise uma palavra, frase ou assunto presente nos documentos enviados.</p>
+                </div>
+            }
+            else if (searchResult.Items.Count == 0)
+            {
+                <div class="empty-results">
+                    <span class="empty-glyph">0</span>
+                    <strong>Nenhum resultado encontrado</strong>
+                    <p>Tente termos mais amplos ou aguarde a indexação do último arquivo.</p>
+                </div>
+            }
+            else
+            {
+                <div class="results-list">
+                    @foreach (var item in searchResult.Items)
+                    {
+                        <article class="result-card">
+                            <div class="file-badge">@FileExtension(item.FileName)</div>
+                            <div class="result-body">
+                                <div class="result-title-row">
+                                    <h3>@item.FileName</h3>
+                                    <span>@FormatScore(item.Score)</span>
+                                </div>
+                                @if (item.Highlights.Count > 0)
+                                {
+                                    <p class="highlight">@SafeHighlight(item.Highlights[0])</p>
+                                }
+                                <div class="metadata">
+                                    <span>@(item.ContentType ?? "arquivo")</span>
+                                    @if (item.Size is not null)
+                                    {
+                                        <span>@FormatSize(item.Size.Value)</span>
+                                    }
+                                    @if (item.LastModified is not null)
+                                    {
+                                        <span>@item.LastModified.Value.ToLocalTime().ToString("dd MMM yyyy · HH:mm")</span>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+<section class="how-it-works">
+    <p class="step-label">Por baixo do capô</p>
+    <div class="flow">
+        <div><span>1</span><strong>Upload seguro</strong><small>Blob privado</small></div>
+        <i>→</i>
+        <div><span>2</span><strong>Extração de texto</strong><small>Indexer do Azure</small></div>
+        <i>→</i>
+        <div><span>3</span><strong>Busca lexical</strong><small>Analisador pt-BR</small></div>
+    </div>
+</section>
+
+@code {
+    private const long MaximumFileSize = 25 * 1024 * 1024;
+    private readonly CancellationTokenSource cancellation = new();
+    private IBrowserFile? selectedFile;
+    private DocumentStatus? documentStatus;
+    private SearchPage? searchResult;
+    private string query = string.Empty;
+    private string? uploadError;
+    private string? searchError;
+    private bool isUploading;
+    private bool isSearching;
+
+    private void SelectFile(InputFileChangeEventArgs args)
+    {
+        selectedFile = args.File;
+        documentStatus = null;
+        uploadError = selectedFile.Size > MaximumFileSize
+            ? "O arquivo ultrapassa o limite de 25 MB."
+            : null;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (selectedFile is null || selectedFile.Size > MaximumFileSize)
+        {
+            return;
+        }
+
+        isUploading = true;
+        uploadError = null;
+        documentStatus = null;
+
+        try
+        {
+            await using var stream = selectedFile.OpenReadStream(MaximumFileSize, cancellation.Token);
+            var accepted = await DocumentService.UploadAsync(
+                new UploadDocument(
+                    stream,
+                    selectedFile.Name,
+                    selectedFile.ContentType,
+                    selectedFile.Size),
+                "/api/documents/{documentId}/status",
+                cancellation.Token);
+
+            documentStatus = new DocumentStatus(
+                accepted.DocumentId,
+                DocumentState.Pending,
+                null,
+                null);
+
+            await PollStatusAsync(accepted.DocumentId);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            uploadError = exception.Message;
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private async Task PollStatusAsync(string documentId)
+    {
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            documentStatus = await DocumentService.GetStatusAsync(documentId, cancellation.Token);
+
+            if (documentStatus.State is not DocumentState.Pending)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellation.Token);
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return;
+        }
+
+        isSearching = true;
+        searchError = null;
+
+        try
+        {
+            searchResult = await SearchService.SearchAsync(
+                query,
+                page: 1,
+                pageSize: 20,
+                cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            searchError = exception.Message;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private static string StatusClass(DocumentState state) => state switch
+    {
+        DocumentState.Indexed => "success",
+        DocumentState.Failed => "error",
+        _ => "pending"
+    };
+
+    private static string StatusTitle(DocumentState state) => state switch
+    {
+        DocumentState.Indexed => "Documento indexado",
+        DocumentState.Failed => "Falha na indexação",
+        _ => "Indexação em andamento"
+    };
+
+    private static string StatusDescription(DocumentState state) => state switch
+    {
+        DocumentState.Indexed => "O conteúdo já está disponível para pesquisa.",
+        DocumentState.Failed => "Confira o formato e tente enviar novamente.",
+        _ => "O Azure está extraindo e organizando o texto."
+    };
+
+    private static string FormatSize(long bytes) => bytes switch
+    {
+        >= 1_048_576 => $"{bytes / 1_048_576d:0.0} MB",
+        >= 1_024 => $"{bytes / 1_024d:0.0} KB",
+        _ => $"{bytes} B"
+    };
+
+    private static string FileExtension(string fileName)
+    {
+        var extension = Path.GetExtension(fileName).TrimStart('.');
+        return string.IsNullOrWhiteSpace(extension) ? "DOC" : extension.ToUpperInvariant();
+    }
+
+    private static string FormatScore(double? score) =>
+        score is null ? "relevante" : $"{score.Value:0.00} pts";
+
+    private static MarkupString SafeHighlight(string highlight)
+    {
+        var safe = HtmlEncoder.Default.Encode(highlight)
+            .Replace("&lt;em&gt;", "<mark>", StringComparison.OrdinalIgnoreCase)
+            .Replace("&lt;/em&gt;", "</mark>", StringComparison.OrdinalIgnoreCase);
+        return new MarkupString(safe);
+    }
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+}
