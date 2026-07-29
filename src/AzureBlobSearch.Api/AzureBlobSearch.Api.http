@@ -1,0 +1,20 @@
+@host = http://localhost:5080
+
+GET {{host}}/
+
+###
+
+POST {{host}}/api/documents
+Content-Type: multipart/form-data; boundary=BlobSearchBoundary
+
+--BlobSearchBoundary
+Content-Disposition: form-data; name="file"; filename="exemplo.txt"
+Content-Type: text/plain
+
+Azure AI Search encontra este texto dentro do arquivo.
+--BlobSearchBoundary--
+
+###
+
+GET {{host}}/api/search?q=Azure&page=1&pageSize=20
+

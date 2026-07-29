@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AzureBlobSearch.Api/AzureBlobSearch.Api.csproj" />
+    <Project Path="src/AzureBlobSearch.Application/AzureBlobSearch.Application.csproj" />
+    <Project Path="src/AzureBlobSearch.Infrastructure/AzureBlobSearch.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AzureBlobSearch.Tests/AzureBlobSearch.Tests.csproj" />
+  </Folder>
+</Solution>
+
