@@ -265,14 +265,15 @@ public sealed class AzureDocumentService(
     {
         SearchRequestPolicy.Validate(query, page, pageSize);
 
+        var focusedQuery = FocusedSearchQuery.Parse(query);
         var candidateCount = HybridSearchPolicy.GetCandidateCount(page, pageSize);
         var searchOptions = new SearchOptions
         {
             Size = candidateCount,
             QueryType = SearchQueryType.Simple,
-            SearchMode = SearchMode.Any
+            SearchMode = SearchMode.All
         };
-        var vectorQuery = new VectorizableTextQuery(query.Trim())
+        var vectorQuery = new VectorizableTextQuery(focusedQuery.Original)
         {
             KNearestNeighborsCount = candidateCount
         };
@@ -288,7 +289,7 @@ public sealed class AzureDocumentService(
         searchOptions.Select.Add("LastModified");
 
         var response = await searchClient.SearchAsync<SearchDocument>(
-            query.Trim(),
+            focusedQuery.LexicalQuery,
             searchOptions,
             cancellationToken);
 
@@ -299,16 +300,13 @@ public sealed class AzureDocumentService(
             var documentId = GetValue<string>(document, "DocumentId") ?? string.Empty;
             var highlights = result.Highlights is not null
                 && result.Highlights.TryGetValue("Content", out var matchedFragments)
-                ? matchedFragments.ToArray()
+                ? SearchHighlightPolicy.OrderByMatchDensity(matchedFragments)
                 : CreateSemanticSnippet(GetValue<string>(document, "Content"));
 
             if (hitsByDocument.TryGetValue(documentId, out var existing))
             {
-                var mergedHighlights = existing.Highlights
-                    .Concat(highlights)
-                    .Distinct(StringComparer.Ordinal)
-                    .Take(3)
-                    .ToArray();
+                var mergedHighlights = SearchHighlightPolicy.OrderByMatchDensity(
+                    existing.Highlights.Concat(highlights));
                 hitsByDocument[documentId] = existing with { Highlights = mergedHighlights };
                 continue;
             }
@@ -324,17 +322,22 @@ public sealed class AzureDocumentService(
         }
 
         var uniqueHits = hitsByDocument.Values.ToArray();
-        var hits = uniqueHits
+        var relevantHits = HybridSearchPolicy.KeepRelevantResults(
+            uniqueHits,
+            hit => hit.Score);
+        var hits = relevantHits
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToArray();
 
         return new SearchPage(
-            query.Trim(),
+            focusedQuery.Original,
             page,
             pageSize,
-            uniqueHits.Length,
-            hits);
+            relevantHits.Count,
+            hits,
+            focusedQuery.Subject,
+            focusedQuery.Focus);
     }
 
     public async Task CheckAsync(CancellationToken cancellationToken)

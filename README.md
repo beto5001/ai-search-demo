@@ -1,6 +1,6 @@
 # Azure Blob Search MVP
 
-Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo com busca híbrida no Azure AI Search. A relevância combina BM25 e similaridade vetorial usando embeddings do Azure OpenAI.
+Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo com busca híbrida no Azure AI Search. A relevância combina BM25 e similaridade vetorial usando embeddings do Microsoft Foundry.
 
 ## Arquitetura
 
@@ -223,6 +223,17 @@ curl.exe "https://SUA-API/api/search?q=cláusula&page=1&pageSize=20"
 Os resultados incluem score, highlights e metadados do arquivo. A consulta combina
 o analisador textual `pt-BR` com o vetor gerado para a pergunta. Resultados de
 vários trechos do mesmo documento são consolidados em um único arquivo.
+
+Para exigir um assunto e dar foco a uma intenção, use a forma:
+
+```powershell
+curl.exe "https://SUA-API/api/search?q=folha%20de%20pagamento%20com%20foco%20em%20ajustes"
+```
+
+Nesse caso, o componente textual procura `"folha de pagamento" AND ajustes`,
+enquanto o vetor usa a pergunta completa para reconhecer termos relacionados.
+Resultados apenas vagamente relacionados são removidos e os trechos com maior
+densidade de correspondências aparecem primeiro.
 
 ### Upload em lote
 

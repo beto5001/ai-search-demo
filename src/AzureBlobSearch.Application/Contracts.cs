@@ -86,7 +86,9 @@ public sealed record SearchPage(
     int Page,
     int PageSize,
     long Total,
-    IReadOnlyList<SearchHit> Items);
+    IReadOnlyList<SearchHit> Items,
+    string? Subject,
+    string? Focus);
 
 public interface IDocumentService
 {
