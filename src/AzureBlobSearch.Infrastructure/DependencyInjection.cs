@@ -21,10 +21,14 @@ public static class DependencyInjection
             .Validate(
                 options => options.StorageAccountUri is not null
                     && options.SearchEndpoint is not null
+                    && options.OpenAIEndpoint is not null
                     && !string.IsNullOrWhiteSpace(options.StorageResourceId)
                     && !string.IsNullOrWhiteSpace(options.ContainerName)
-                    && !string.IsNullOrWhiteSpace(options.IndexName),
-                "As configurações Azure:StorageAccountUri, Azure:StorageResourceId e Azure:SearchEndpoint são obrigatórias.")
+                    && !string.IsNullOrWhiteSpace(options.IndexName)
+                    && !string.IsNullOrWhiteSpace(options.SkillsetName)
+                    && !string.IsNullOrWhiteSpace(options.EmbeddingDeploymentName)
+                    && options.EmbeddingDimensions > 0,
+                "As configurações de Storage, Azure AI Search e embeddings do Microsoft Foundry são obrigatórias.")
             .ValidateOnStart();
 
         services.AddSingleton<TokenCredential>(provider =>

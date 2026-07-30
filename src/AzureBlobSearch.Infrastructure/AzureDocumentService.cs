@@ -216,32 +216,45 @@ public sealed class AzureDocumentService(
     {
         try
         {
-            await searchClient.GetDocumentAsync<SearchDocument>(
-                documentId,
-                cancellationToken: cancellationToken);
+            var statusOptions = new SearchOptions
+            {
+                Size = 1,
+                Filter = $"DocumentId eq '{EscapeODataString(documentId)}'"
+            };
+            statusOptions.Select.Add("ChunkId");
 
-            return new DocumentStatus(documentId, DocumentState.Indexed, null, null);
+            var indexedChunks = await searchClient.SearchAsync<SearchDocument>(
+                "*",
+                statusOptions,
+                cancellationToken);
+
+            await foreach (var _ in indexedChunks.Value.GetResultsAsync())
+            {
+                return new DocumentStatus(documentId, DocumentState.Indexed, null, null);
+            }
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
         {
-            var indexerStatus = await searchIndexerClient.GetIndexerStatusAsync(
-                _options.IndexerName,
-                cancellationToken);
-            var lastResult = indexerStatus.Value.LastResult;
-            var statusText = lastResult?.Status.ToString();
-            var failed = statusText?.Contains("Failure", StringComparison.OrdinalIgnoreCase) == true;
-            var error = failed
-                ? lastResult is not null && lastResult.Errors.Count > 0
-                    ? lastResult.Errors[0].ErrorMessage
-                    : "A última execução do indexador falhou."
-                : null;
-
-            return new DocumentStatus(
-                documentId,
-                failed ? DocumentState.Failed : DocumentState.Pending,
-                error,
-                lastResult?.EndTime ?? lastResult?.StartTime);
+            // O índice pode ainda estar sendo criado pelo bootstrap da aplicação.
         }
+
+        var indexerStatus = await searchIndexerClient.GetIndexerStatusAsync(
+            _options.IndexerName,
+            cancellationToken);
+        var lastResult = indexerStatus.Value.LastResult;
+        var statusText = lastResult?.Status.ToString();
+        var failed = statusText?.Contains("Failure", StringComparison.OrdinalIgnoreCase) == true;
+        var error = failed
+            ? lastResult is not null && lastResult.Errors.Count > 0
+                ? lastResult.Errors[0].ErrorMessage
+                : "A última execução do indexador falhou."
+            : null;
+
+        return new DocumentStatus(
+            documentId,
+            failed ? DocumentState.Failed : DocumentState.Pending,
+            error,
+            lastResult?.EndTime ?? lastResult?.StartTime);
     }
 
     public async Task<SearchPage> SearchAsync(
@@ -252,17 +265,24 @@ public sealed class AzureDocumentService(
     {
         SearchRequestPolicy.Validate(query, page, pageSize);
 
+        var candidateCount = HybridSearchPolicy.GetCandidateCount(page, pageSize);
         var searchOptions = new SearchOptions
         {
-            IncludeTotalCount = true,
-            Skip = (page - 1) * pageSize,
-            Size = pageSize,
+            Size = candidateCount,
             QueryType = SearchQueryType.Simple,
             SearchMode = SearchMode.Any
         };
+        var vectorQuery = new VectorizableTextQuery(query.Trim())
+        {
+            KNearestNeighborsCount = candidateCount
+        };
+        vectorQuery.Fields.Add(SearchBootstrapper.VectorFieldName);
+        searchOptions.VectorSearch = new VectorSearchOptions();
+        searchOptions.VectorSearch.Queries.Add(vectorQuery);
         searchOptions.HighlightFields.Add("Content");
-        searchOptions.Select.Add("Id");
+        searchOptions.Select.Add("DocumentId");
         searchOptions.Select.Add("FileName");
+        searchOptions.Select.Add("Content");
         searchOptions.Select.Add("ContentType");
         searchOptions.Select.Add("Size");
         searchOptions.Select.Add("LastModified");
@@ -272,27 +292,48 @@ public sealed class AzureDocumentService(
             searchOptions,
             cancellationToken);
 
-        var hits = new List<SearchHit>();
+        var hitsByDocument = new Dictionary<string, SearchHit>(StringComparer.Ordinal);
         await foreach (var result in response.Value.GetResultsAsync())
         {
             var document = result.Document;
-            hits.Add(new SearchHit(
-                GetValue<string>(document, "Id") ?? string.Empty,
+            var documentId = GetValue<string>(document, "DocumentId") ?? string.Empty;
+            var highlights = result.Highlights is not null
+                && result.Highlights.TryGetValue("Content", out var matchedFragments)
+                ? matchedFragments.ToArray()
+                : CreateSemanticSnippet(GetValue<string>(document, "Content"));
+
+            if (hitsByDocument.TryGetValue(documentId, out var existing))
+            {
+                var mergedHighlights = existing.Highlights
+                    .Concat(highlights)
+                    .Distinct(StringComparer.Ordinal)
+                    .Take(3)
+                    .ToArray();
+                hitsByDocument[documentId] = existing with { Highlights = mergedHighlights };
+                continue;
+            }
+
+            hitsByDocument.Add(documentId, new SearchHit(
+                documentId,
                 GetValue<string>(document, "FileName") ?? "sem-nome",
                 GetValue<string>(document, "ContentType"),
                 GetValue<long?>(document, "Size"),
                 GetValue<DateTimeOffset?>(document, "LastModified"),
                 result.Score,
-                result.Highlights.TryGetValue("Content", out var highlights)
-                    ? highlights.ToArray()
-                    : []));
+                highlights));
         }
+
+        var uniqueHits = hitsByDocument.Values.ToArray();
+        var hits = uniqueHits
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToArray();
 
         return new SearchPage(
             query.Trim(),
             page,
             pageSize,
-            response.Value.TotalCount ?? hits.Count,
+            uniqueHits.Length,
             hits);
     }
 
@@ -402,5 +443,30 @@ public sealed class AzureDocumentService(
             value,
             targetType,
             System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string EscapeODataString(string value) =>
+        value.Replace("'", "''", StringComparison.Ordinal);
+
+    private static string[] CreateSemanticSnippet(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return [];
+        }
+
+        const int maximumLength = 320;
+        var normalized = string.Join(
+            " ",
+            content.Split(
+                [' ', '\r', '\n', '\t'],
+                StringSplitOptions.RemoveEmptyEntries));
+
+        return
+        [
+            normalized.Length <= maximumLength
+                ? normalized
+                : $"{normalized[..maximumLength].TrimEnd()}…"
+        ];
     }
 }

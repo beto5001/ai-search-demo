@@ -10,7 +10,9 @@
     },
     "searchSku": {
       "value": "basic"
+    },
+    "embeddingAccountName": {
+      "value": "CHANGE-ME"
     }
   }
 }
-

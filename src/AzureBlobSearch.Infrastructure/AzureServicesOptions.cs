@@ -14,11 +14,21 @@ public sealed class AzureServicesOptions
 
     public string BatchContainerName { get; init; } = "batch-status";
 
-    public string IndexName { get; init; } = "documents-index";
+    public string IndexName { get; init; } = "document-chunks-index";
 
     public string DataSourceName { get; init; } = "documents-blob-datasource";
 
-    public string IndexerName { get; init; } = "documents-blob-indexer";
+    public string IndexerName { get; init; } = "documents-vector-indexer";
+
+    public string SkillsetName { get; init; } = "documents-vector-skillset";
+
+    public required Uri OpenAIEndpoint { get; init; }
+
+    public string EmbeddingDeploymentName { get; init; } = "text-embedding-3-small";
+
+    public string EmbeddingModelName { get; init; } = "text-embedding-3-small";
+
+    public int EmbeddingDimensions { get; init; } = 1536;
 
     public long MaximumUploadBytes { get; init; } = 25 * 1024 * 1024;
 

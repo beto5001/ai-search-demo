@@ -18,6 +18,9 @@ param bootstrapImage string = 'mcr.microsoft.com/dotnet/samples:aspnetapp'
 ])
 param searchSku string = 'basic'
 
+@description('Nome de um recurso Microsoft Foundry/Azure OpenAI existente no mesmo resource group.')
+param embeddingAccountName string
+
 var suffix = uniqueString(subscription().subscriptionId, resourceGroup().id, namePrefix)
 var storageName = toLower('stg${take(replace('${namePrefix}${suffix}', '-', ''), 21)}')
 var searchName = toLower(take('${namePrefix}-${suffix}', 60))
@@ -52,6 +55,10 @@ var searchIndexDataContributorRoleId = subscriptionResourceId(
 var searchIndexDataReaderRoleId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
   '1407120a-92aa-4202-b7e9-c0e197c71c8f'
+)
+var cognitiveServicesOpenAIUserRoleId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd'
 )
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
@@ -120,6 +127,15 @@ resource search 'Microsoft.Search/searchServices@2023-11-01' = {
   }
 }
 
+resource embeddingAccount 'Microsoft.CognitiveServices/accounts@2024-10-01' existing = {
+  name: embeddingAccountName
+}
+
+resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' existing = {
+  parent: embeddingAccount
+  name: 'text-embedding-3-small'
+}
+
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: registryName
   location: location
@@ -169,6 +185,16 @@ resource searchStorageReader 'Microsoft.Authorization/roleAssignments@2022-04-01
     principalId: search.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: storageBlobDataReaderRoleId
+  }
+}
+
+resource searchOpenAIUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(embeddingAccount.id, search.id, cognitiveServicesOpenAIUserRoleId)
+  scope: embeddingAccount
+  properties: {
+    principalId: search.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveServicesOpenAIUserRoleId
   }
 }
 
@@ -281,6 +307,26 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'https://${search.name}.search.windows.net'
             }
             {
+              name: 'Azure__OpenAIEndpoint'
+              value: 'https://${embeddingAccount.name}.services.ai.azure.com'
+            }
+            {
+              name: 'Azure__IndexName'
+              value: 'document-chunks-index'
+            }
+            {
+              name: 'Azure__IndexerName'
+              value: 'documents-vector-indexer'
+            }
+            {
+              name: 'Azure__SkillsetName'
+              value: 'documents-vector-skillset'
+            }
+            {
+              name: 'Azure__EmbeddingDeploymentName'
+              value: embeddingDeployment.name
+            }
+            {
               name: 'Azure__ContainerName'
               value: containerName
             }
@@ -335,6 +381,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
     appSearchDataReader
     appRegistryPull
     searchStorageReader
+    searchOpenAIUser
   ]
 }
 
@@ -344,4 +391,6 @@ output registryName string = registry.name
 output registryLoginServer string = registry.properties.loginServer
 output storageAccountName string = storage.name
 output searchServiceName string = search.name
+output embeddingAccountName string = embeddingAccount.name
+output embeddingEndpoint string = 'https://${embeddingAccount.name}.services.ai.azure.com'
 output appIdentityClientId string = appIdentity.properties.clientId

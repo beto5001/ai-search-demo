@@ -6,7 +6,10 @@ param(
 
     [string] $Location = "brazilsouth",
 
-    [string] $NamePrefix = "blobsearch"
+    [string] $NamePrefix = "blobsearch",
+
+    [Parameter(Mandatory = $true)]
+    [string] $EmbeddingAccountName
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,11 +30,50 @@ Assert-LastCommand "selecionar a assinatura Azure"
 az group create --name $ResourceGroup --location $Location --output none
 Assert-LastCommand "criar ou atualizar o resource group"
 
+$embeddingAccountKind = az cognitiveservices account show `
+    --name $EmbeddingAccountName `
+    --resource-group $ResourceGroup `
+    --query kind `
+    --output tsv
+Assert-LastCommand "consultar o recurso de embeddings"
+
+if ($embeddingAccountKind -notin @("AIServices", "OpenAI")) {
+    throw "O recurso '$EmbeddingAccountName' não é Microsoft Foundry nem Azure OpenAI (kind: $embeddingAccountKind)."
+}
+
+$embeddingDeploymentState = az cognitiveservices account deployment show `
+    --name $EmbeddingAccountName `
+    --resource-group $ResourceGroup `
+    --deployment-name "text-embedding-3-small" `
+    --query properties.provisioningState `
+    --output tsv
+Assert-LastCommand "validar o deployment text-embedding-3-small"
+
+if ($embeddingDeploymentState -ne "Succeeded") {
+    throw "O deployment text-embedding-3-small não está pronto (estado: $embeddingDeploymentState)."
+}
+
+$currentImage = az containerapp list `
+    --resource-group $ResourceGroup `
+    --query "[?name=='$NamePrefix-api'] | [0].properties.template.containers[0].image" `
+    --output tsv
+Assert-LastCommand "consultar a imagem atual da Container App"
+
+$deploymentParameters = @(
+    "namePrefix=$NamePrefix",
+    "location=$Location",
+    "embeddingAccountName=$EmbeddingAccountName"
+)
+
+if (-not [string]::IsNullOrWhiteSpace($currentImage)) {
+    $deploymentParameters += "bootstrapImage=$currentImage"
+}
+
 az deployment group create `
     --name $deploymentName `
     --resource-group $ResourceGroup `
     --template-file "$projectRoot/infra/main.bicep" `
-    --parameters namePrefix=$NamePrefix location=$Location `
+    --parameters $deploymentParameters `
     --output none
 Assert-LastCommand "implantar a infraestrutura Bicep"
 

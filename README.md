@@ -1,6 +1,6 @@
 # Azure Blob Search MVP
 
-Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo extraído pelo Azure AI Search. Inclui interface web responsiva e API HTTP documentada com OpenAPI.
+Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo com busca híbrida no Azure AI Search. A relevância combina BM25 e similaridade vetorial usando embeddings do Azure OpenAI.
 
 ## Arquitetura
 
@@ -10,10 +10,15 @@ flowchart LR
     API -->|Managed Identity| Blob[(Blob Storage)]
     API -->|inicia indexador e consulta| Search[Azure AI Search]
     Search -->|Managed Identity| Blob
-    Search --> Index[(Índice textual)]
+    Search -->|Managed Identity| Foundry[Microsoft Foundry embeddings]
+    Search --> Index[(Índice textual + vetorial)]
 ```
 
-O indexador do Azure AI Search extrai o texto dos documentos. A API não precisa baixar PDFs nem executar bibliotecas locais de parsing.
+O indexador extrai o texto, divide cada documento em trechos sobrepostos, gera um
+embedding para cada trecho e grava texto, vetor e metadados no índice. Durante a
+pesquisa, BM25 e busca vetorial rodam em paralelo e o Azure AI Search combina os
+rankings com Reciprocal Rank Fusion (RRF). A API não precisa baixar PDFs nem
+executar bibliotecas locais de parsing.
 
 ## Interface Blazor
 
@@ -22,7 +27,7 @@ A página inicial oferece o fluxo completo do MVP:
 1. seleção e upload de PDF, DOCX ou TXT;
 2. upload em lote de até 100 documentos dentro de um ZIP;
 3. acompanhamento automático até os documentos serem indexados;
-4. pesquisa textual com score, metadados e trechos destacados;
+4. pesquisa híbrida por palavras e significado, com score, metadados e trechos destacados;
 5. layout responsivo para desktop e celular.
 
 O projeto usa **Blazor Web App com Interactive Server**. Os componentes rodam no servidor por uma conexão SignalR e reutilizam diretamente os serviços da camada de aplicação. Isso mantém a UI e a API no mesmo deploy, sem CORS e sem um segundo Container App.
@@ -34,12 +39,13 @@ O arquivo `infra/main.bicep` cria:
 - Storage Account e container privado `documents`;
 - container privado `batch-status` para persistir o progresso dos lotes;
 - Azure AI Search Basic com autenticação exclusiva por Microsoft Entra ID;
+- conexão com um deployment existente `text-embedding-3-small` no Microsoft Foundry;
 - Azure Container Registry;
 - Azure Container Apps Environment e Container App;
 - Log Analytics Workspace;
 - identidades gerenciadas e todos os role assignments necessários.
 
-Nenhuma chave de Storage ou Search é armazenada pela aplicação.
+Nenhuma chave de Storage, Search ou Azure OpenAI é armazenada pela aplicação.
 
 ## Pré-requisitos
 
@@ -48,6 +54,8 @@ Nenhuma chave de Storage ou Search é armazenada pela aplicação.
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli-windows);
 - extensão Container Apps do Azure CLI;
 - permissão `Owner` ou `User Access Administrator` + `Contributor` na assinatura/resource group, pois o Bicep cria role assignments.
+- um recurso Microsoft Foundry no mesmo resource group, com o modelo
+  `text-embedding-3-small` implantado.
 
 O Docker local não é necessário: o .NET 10 constrói a imagem OCI e a envia diretamente ao Azure Container Registry.
 
@@ -65,11 +73,28 @@ az provider register --namespace Microsoft.Storage
 az provider register --namespace Microsoft.App
 az provider register --namespace Microsoft.ContainerRegistry
 az provider register --namespace Microsoft.OperationalInsights
+az provider register --namespace Microsoft.CognitiveServices
 ```
 
 Copie o `SubscriptionId` mostrado por `az account list`.
 
-## 2. Criar e publicar tudo
+## 2. Preparar o modelo de embeddings
+
+No [portal do Microsoft Foundry](https://ai.azure.com):
+
+1. crie ou abra um recurso/projeto no mesmo resource group da aplicação;
+2. em **Descobrir > Modelos**, escolha `text-embedding-3-small`;
+3. clique em **Implantar** e use também `text-embedding-3-small` como nome do
+   deployment;
+4. para o MVP, selecione `GlobalStandard`, capacidade mínima disponível e a
+   política `OnceNewDefaultVersionAvailable`;
+5. aguarde o estado **Succeeded**.
+
+O script recebe apenas o nome do recurso. A chave exibida pelo Foundry não é
+necessária: o Azure AI Search chama o modelo com sua identidade gerenciada e a
+role `Cognitive Services OpenAI User`.
+
+## 3. Criar e publicar tudo
 
 A partir da raiz do repositório:
 
@@ -78,22 +103,47 @@ A partir da raiz do repositório:
   -SubscriptionId "00000000-0000-0000-0000-000000000000" `
   -ResourceGroup "rg-blob-search-mvp" `
   -Location "brazilsouth" `
-  -NamePrefix "minhabusca"
+  -NamePrefix "minhabusca" `
+  -EmbeddingAccountName "nome-do-recurso-foundry"
 ```
 
 O script:
 
 1. cria o resource group;
-2. implanta o Bicep;
-3. constrói a imagem OCI com o .NET 10 e a envia ao Azure Container Registry;
-4. publica a imagem na Container App;
-5. mostra a URL HTTPS da API e do OpenAPI.
+2. valida o deployment de embeddings existente no Microsoft Foundry;
+3. implanta o Bicep e conecta o Azure AI Search ao modelo por identidade gerenciada;
+4. constrói a imagem OCI com o .NET 10 e a envia ao Azure Container Registry;
+5. publica a imagem na Container App;
+6. mostra a URL HTTPS da API e do OpenAPI.
 
 `NamePrefix` deve ter de 3 a 12 caracteres. Os nomes globalmente únicos de Storage, Search e ACR recebem um sufixo determinístico.
 
-> O Azure AI Search Basic e o Log Analytics geram cobrança. Para encerrar o MVP, exclua somente o resource group criado: `az group delete --name rg-blob-search-mvp`.
+> O Azure AI Search Basic e o Log Analytics geram cobrança contínua. O Azure
+> OpenAI cobra pelos tokens usados para gerar embeddings. Para encerrar o MVP,
+> exclua somente o resource group criado:
+> `az group delete --name rg-blob-search-mvp`.
 
-## 3. O que cada identidade pode fazer
+### Se a Azure retornar `715-123420`
+
+Esse código indica um bloqueio de proteção contra fraude no nível da assinatura.
+Não é erro do Bicep, falta de quota, região ou RBAC. Não repita deployments nem
+recrie os recursos. Abra uma solicitação em **Portal Azure > Ajuda + suporte >
+Criar uma solicitação de suporte**, escolha um problema de assinatura/cobrança se
+o fluxo técnico não estiver disponível e peça encaminhamento para revisão do
+time **Real-Time Fraud Protection (RTFP)**.
+
+Inclua no chamado:
+
+- código `715-123420`;
+- horário UTC de uma tentativa;
+- região e modelo;
+- ID do recurso Azure OpenAI afetado;
+- confirmação de que a assinatura está ativa e possui quota do modelo.
+
+Depois que a Microsoft confirmar a liberação, crie o deployment no Foundry e
+execute `scripts/deploy.ps1` novamente. Nenhuma alteração no código é necessária.
+
+## 4. O que cada identidade pode fazer
 
 | Identidade | Escopo | Role |
 |---|---|---|
@@ -103,8 +153,11 @@ O script:
 | Container App | Azure AI Search | Search Index Data Reader |
 | Container App | ACR | AcrPull |
 | Azure AI Search | Storage Account | Storage Blob Data Reader |
+| Azure AI Search | Azure OpenAI | Cognitive Services OpenAI User |
 
-Na primeira inicialização, a API cria ou atualiza de forma idempotente o índice, data source e indexador. O indexador também roda a cada cinco minutos.
+Na primeira inicialização, a API cria ou atualiza de forma idempotente o índice
+vetorial, data source, skillset e indexador. O indexador também roda a cada cinco
+minutos.
 
 ## Executar localmente
 
@@ -122,7 +175,8 @@ Configure o projeto sem salvar segredos no Git:
 .\scripts\configure-local.ps1 `
   -StorageAccountName "nome-do-storage" `
   -StorageResourceId "/subscriptions/.../resourceGroups/.../providers/Microsoft.Storage/storageAccounts/..." `
-  -SearchServiceName "nome-do-search"
+  -SearchServiceName "nome-do-search" `
+  -EmbeddingAccountName "nome-do-recurso-foundry"
 
 dotnet run --project .\src\AzureBlobSearch.Api
 ```
@@ -166,7 +220,9 @@ O estado será `pending`, `indexed` ou `failed`.
 curl.exe "https://SUA-API/api/search?q=cláusula&page=1&pageSize=20"
 ```
 
-Os resultados incluem score, highlights e metadados do arquivo. O analisador do campo `content` é `pt-BR`.
+Os resultados incluem score, highlights e metadados do arquivo. A consulta combina
+o analisador textual `pt-BR` com o vetor gerado para a pergunta. Resultados de
+vários trechos do mesmo documento são consolidados em um único arquivo.
 
 ### Upload em lote
 
@@ -205,14 +261,19 @@ Variáveis de ambiente usam a convenção do ASP.NET Core:
 | `Azure__SearchEndpoint` | `https://servico.search.windows.net` |
 | `Azure__ContainerName` | `documents` |
 | `Azure__BatchContainerName` | `batch-status` |
-| `Azure__IndexName` | `documents-index` |
-| `Azure__IndexerName` | `documents-blob-indexer` |
+| `Azure__IndexName` | `document-chunks-index` |
+| `Azure__IndexerName` | `documents-vector-indexer` |
+| `Azure__SkillsetName` | `documents-vector-skillset` |
+| `Azure__OpenAIEndpoint` | `https://recurso.services.ai.azure.com` |
+| `Azure__EmbeddingDeploymentName` | `text-embedding-3-small` |
+| `Azure__EmbeddingModelName` | `text-embedding-3-small` |
+| `Azure__EmbeddingDimensions` | `1536` |
 | `Azure__MaximumUploadBytes` | `26214400` |
 | `Azure__ManagedIdentityClientId` | client ID da identidade atribuída pelo usuário |
 
 ## Limitações intencionais do MVP
 
-- busca textual, sem embeddings ou Azure OpenAI;
+- busca híbrida sem Semantic Ranker e sem respostas geradas por LLM;
 - API pública sem autenticação de usuário;
 - limite padrão de 25 MB por arquivo;
 - limite de 100 arquivos por ZIP, 100 MB compactado e 250 MB descompactado;
