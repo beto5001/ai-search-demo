@@ -19,5 +19,7 @@ infra/*.parameters.local.json
 .montage-temp/
 .slides-test-temp/
 presentation/AzureBlobSearch-3-Fases/
+presentation/AzureBlobSearch-3-Fases-Arquitetura/
 presentation/*.inspect.ndjson
 presentation/*-montage.png
+presentation/~$*
