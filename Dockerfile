@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.302 AS build
 WORKDIR /src
 
 COPY ["Directory.Build.props", "Directory.Build.props"]
@@ -21,4 +21,3 @@ USER $APP_UID
 EXPOSE 8080
 ENV ASPNETCORE_HTTP_PORTS=8080
 ENTRYPOINT ["dotnet", "AzureBlobSearch.Api.dll"]
-

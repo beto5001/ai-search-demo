@@ -26,9 +26,13 @@ public sealed class AzureServicesOptions
 
     public string EmbeddingDeploymentName { get; init; } = "text-embedding-3-small";
 
+    public string ChatDeploymentName { get; init; } = "gpt-4.1-mini";
+
     public string EmbeddingModelName { get; init; } = "text-embedding-3-small";
 
     public int EmbeddingDimensions { get; init; } = 1536;
+
+    public int MaximumChatOutputTokens { get; init; } = 600;
 
     public long MaximumUploadBytes { get; init; } = 25 * 1024 * 1024;
 

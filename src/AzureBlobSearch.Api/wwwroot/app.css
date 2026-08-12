@@ -106,6 +106,30 @@ button, a, label {
     color: var(--ink);
 }
 
+.product-nav {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: rgba(255, 254, 249, .68);
+}
+
+.product-nav a {
+    padding: 8px 13px;
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: .78rem;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.product-nav a.active {
+    background: var(--ink);
+    color: white;
+}
+
 .status-pill {
     display: inline-flex;
     align-items: center;
@@ -886,6 +910,339 @@ footer {
     font-size: .73rem;
 }
 
+.chat-hero {
+    min-height: 245px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 40px;
+    padding: 58px 3% 38px;
+}
+
+.chat-hero h1 {
+    max-width: 760px;
+    margin: 0;
+    font-family: "Manrope", sans-serif;
+    font-size: clamp(2.6rem, 5.5vw, 4.8rem);
+    line-height: 1;
+    letter-spacing: -.065em;
+}
+
+.chat-hero h1 em {
+    color: var(--navy);
+    font-style: normal;
+}
+
+.chat-hero > div > p:last-child {
+    max-width: 680px;
+    margin: 20px 0 0;
+    color: var(--muted);
+    line-height: 1.65;
+}
+
+.new-chat-button {
+    flex: 0 0 auto;
+    padding: 11px 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.new-chat-button:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+}
+
+.chat-workspace {
+    min-height: 670px;
+    display: grid;
+    grid-template-columns: minmax(230px, .34fr) minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 25px;
+    background: rgba(255, 254, 249, .8);
+    box-shadow: var(--shadow);
+}
+
+.chat-guide {
+    padding: 31px;
+    border-right: 1px solid var(--line);
+    background: rgba(23, 43, 58, .035);
+}
+
+.chat-guide h2 {
+    margin: 0;
+    font-family: "Manrope", sans-serif;
+    font-size: 1.35rem;
+}
+
+.chat-guide > p:not(.step-label) {
+    color: var(--muted);
+    font-size: .87rem;
+    line-height: 1.55;
+}
+
+.suggestion-list {
+    display: grid;
+    gap: 9px;
+    margin-top: 25px;
+}
+
+.suggestion-list button {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+    font-size: .78rem;
+    line-height: 1.4;
+}
+
+.suggestion-list button:hover {
+    border-color: var(--acid-dark);
+}
+
+.grounding-note {
+    display: grid;
+    gap: 4px;
+    margin-top: 28px;
+    padding: 14px;
+    border-radius: 13px;
+    background: rgba(201, 243, 107, .2);
+}
+
+.grounding-note strong {
+    font-size: .78rem;
+}
+
+.grounding-note span {
+    color: var(--muted);
+    font-size: .72rem;
+    line-height: 1.45;
+}
+
+.chat-panel {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 1fr auto;
+    padding: 24px;
+    background: rgba(255, 255, 255, .62);
+}
+
+.chat-messages {
+    max-height: 585px;
+    overflow-y: auto;
+    padding: 6px 8px 22px;
+    scrollbar-color: #929a95 transparent;
+    scrollbar-width: thin;
+}
+
+.chat-empty {
+    min-height: 410px;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    text-align: center;
+}
+
+.chat-empty-mark {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 19px;
+    background: var(--acid);
+    font-family: "Manrope", sans-serif;
+    font-size: 1.35rem;
+    font-weight: 800;
+    transform: rotate(-4deg);
+}
+
+.chat-empty h2 {
+    margin: 18px 0 5px;
+    font-family: "Manrope", sans-serif;
+}
+
+.chat-empty p {
+    max-width: 480px;
+    margin: 0;
+    color: var(--muted);
+}
+
+.chat-message {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+.chat-message.user {
+    margin-left: 12%;
+}
+
+.message-avatar {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 13px;
+    background: var(--navy);
+    color: white;
+    font-size: .65rem;
+    font-weight: 800;
+}
+
+.chat-message.user .message-avatar {
+    background: var(--acid);
+    color: var(--ink);
+}
+
+.message-content {
+    min-width: 0;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 4px 16px 16px;
+    background: white;
+}
+
+.chat-message.user .message-content {
+    background: rgba(201, 243, 107, .14);
+}
+
+.message-content > strong {
+    font-size: .72rem;
+}
+
+.message-content > p {
+    margin: 7px 0 0;
+    color: #45514b;
+    font-size: .9rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+}
+
+.chat-sources {
+    display: grid;
+    gap: 8px;
+    margin-top: 17px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--line);
+}
+
+.sources-title {
+    color: var(--acid-dark);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.source-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+}
+
+.source-card summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: .72rem;
+}
+
+.source-card summary span {
+    flex: 0 0 auto;
+    color: var(--acid-dark);
+}
+
+.source-card p {
+    margin: 0;
+    padding: 0 12px 12px;
+    color: var(--muted);
+    font-size: .75rem;
+    line-height: 1.55;
+}
+
+.chat-status {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 4px 0 8px 54px;
+    color: var(--muted);
+    font-size: .75rem;
+}
+
+.chat-status i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--acid-dark);
+    animation: pulse 1s ease-in-out infinite alternate;
+}
+
+.chat-composer {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1.5px solid var(--ink);
+    border-radius: 16px;
+    background: white;
+    box-shadow: 0 9px 30px rgba(23, 32, 28, .09);
+}
+
+.chat-composer textarea {
+    min-height: 62px;
+    resize: none;
+    border: 0;
+    outline: 0;
+    color: var(--ink);
+    font: inherit;
+}
+
+.chat-composer > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chat-composer small {
+    color: var(--muted);
+    font-size: .65rem;
+}
+
+.chat-composer button {
+    min-width: 90px;
+    padding: 9px 13px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--acid);
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: 800;
+}
+
+.chat-composer button:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+}
+
+.chat-error {
+    margin: 0 0 12px;
+}
+
+@keyframes pulse {
+    from { opacity: .35; transform: scale(.75); }
+    to { opacity: 1; transform: scale(1); }
+}
+
 .empty-state {
     min-height: 70vh;
     display: grid;
@@ -941,6 +1298,23 @@ footer {
     .workspace {
         grid-template-columns: 1fr;
     }
+
+    .topnav {
+        display: none;
+    }
+
+    .chat-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-guide {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+    }
+
+    .suggestion-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
 }
 
 @media (max-width: 600px) {
@@ -954,6 +1328,15 @@ footer {
 
     .topnav > a {
         display: none;
+    }
+
+    .brand > span:last-child {
+        display: none;
+    }
+
+    .product-nav a {
+        padding: 7px 9px;
+        font-size: .69rem;
     }
 
     .hero h1 {
@@ -982,6 +1365,29 @@ footer {
 
     .flow i {
         display: none;
+    }
+
+    .chat-hero {
+        min-height: auto;
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 45px 1% 30px;
+    }
+
+    .chat-guide {
+        padding: 22px;
+    }
+
+    .suggestion-list {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-panel {
+        padding: 12px;
+    }
+
+    .chat-message.user {
+        margin-left: 0;
     }
 
     footer {

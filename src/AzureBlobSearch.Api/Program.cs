@@ -118,6 +118,17 @@ app.MapGet("/api/search", async (
 .WithName("SearchDocuments")
 .WithSummary("Pesquisa no conteúdo dos documentos indexados");
 
+app.MapPost("/api/chat", async (
+    ChatRequest request,
+    IDocumentChatService chatService,
+    CancellationToken cancellationToken) =>
+{
+    var response = await chatService.CompleteAsync(request, cancellationToken);
+    return Results.Ok(response);
+})
+.WithName("ChatWithDocuments")
+.WithSummary("Conversa com os documentos usando RAG e devolve resposta com fontes");
+
 app.MapGet("/health/live", () => Results.Ok(new { status = "healthy" }))
     .ExcludeFromDescription();
 

@@ -136,6 +136,11 @@ resource embeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   name: 'text-embedding-3-small'
 }
 
+resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' existing = {
+  parent: embeddingAccount
+  name: 'gpt-4.1-mini'
+}
+
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: registryName
   location: location
@@ -193,6 +198,16 @@ resource searchOpenAIUser 'Microsoft.Authorization/roleAssignments@2022-04-01' =
   scope: embeddingAccount
   properties: {
     principalId: search.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: cognitiveServicesOpenAIUserRoleId
+  }
+}
+
+resource appOpenAIUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(embeddingAccount.id, appIdentity.id, cognitiveServicesOpenAIUserRoleId)
+  scope: embeddingAccount
+  properties: {
+    principalId: appIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: cognitiveServicesOpenAIUserRoleId
   }
@@ -327,6 +342,14 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
               value: embeddingDeployment.name
             }
             {
+              name: 'Azure__ChatDeploymentName'
+              value: chatDeployment.name
+            }
+            {
+              name: 'Azure__MaximumChatOutputTokens'
+              value: '600'
+            }
+            {
               name: 'Azure__ContainerName'
               value: containerName
             }
@@ -382,6 +405,7 @@ resource app 'Microsoft.App/containerApps@2024-03-01' = {
     appRegistryPull
     searchStorageReader
     searchOpenAIUser
+    appOpenAIUser
   ]
 }
 

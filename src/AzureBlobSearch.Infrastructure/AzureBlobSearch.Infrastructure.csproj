@@ -5,8 +5,8 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
     <PackageReference Include="Azure.Search.Documents" Version="11.7.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.1" />
   </ItemGroup>
 </Project>
-

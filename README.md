@@ -1,6 +1,6 @@
 # Azure Blob Search MVP
 
-Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e permite pesquisar o conteúdo com busca híbrida no Azure AI Search. A relevância combina BM25 e similaridade vetorial usando embeddings do Microsoft Foundry.
+Aplicação **Blazor + .NET 10** que recebe arquivos PDF, DOCX e TXT, armazena-os no Azure Blob Storage e oferece busca híbrida e conversa RAG sobre o conteúdo. A recuperação combina BM25 e vetores no Azure AI Search; o `gpt-4.1-mini` compõe respostas estritamente fundamentadas com citações.
 
 ## Arquitetura
 
@@ -12,6 +12,8 @@ flowchart LR
     Search -->|Managed Identity| Blob
     Search -->|Managed Identity| Foundry[Microsoft Foundry embeddings]
     Search --> Index[(Índice textual + vetorial)]
+    API -->|Managed Identity| Chat[Foundry gpt-4.1-mini]
+    API -->|RAG: trechos + pergunta| Chat
 ```
 
 O indexador extrai o texto, divide cada documento em trechos sobrepostos, gera um
@@ -22,13 +24,14 @@ executar bibliotecas locais de parsing.
 
 ## Interface Blazor
 
-A página inicial oferece o fluxo completo do MVP:
+A interface oferece dois modos complementares:
 
 1. seleção e upload de PDF, DOCX ou TXT;
 2. upload em lote de até 100 documentos dentro de um ZIP;
 3. acompanhamento automático até os documentos serem indexados;
 4. pesquisa híbrida por palavras e significado, com score, metadados e trechos destacados;
-5. layout responsivo para desktop e celular.
+5. conversa RAG com memória durante a aba, streaming e fontes;
+6. layout responsivo para desktop e celular.
 
 O projeto usa **Blazor Web App com Interactive Server**. Os componentes rodam no servidor por uma conexão SignalR e reutilizam diretamente os serviços da camada de aplicação. Isso mantém a UI e a API no mesmo deploy, sem CORS e sem um segundo Container App.
 
@@ -39,7 +42,7 @@ O arquivo `infra/main.bicep` cria:
 - Storage Account e container privado `documents`;
 - container privado `batch-status` para persistir o progresso dos lotes;
 - Azure AI Search Basic com autenticação exclusiva por Microsoft Entra ID;
-- conexão com um deployment existente `text-embedding-3-small` no Microsoft Foundry;
+- conexão com deployments existentes `text-embedding-3-small` e `gpt-4.1-mini` no Microsoft Foundry;
 - Azure Container Registry;
 - Azure Container Apps Environment e Container App;
 - Log Analytics Workspace;
@@ -54,8 +57,8 @@ Nenhuma chave de Storage, Search ou Azure OpenAI é armazenada pela aplicação.
 - [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli-windows);
 - extensão Container Apps do Azure CLI;
 - permissão `Owner` ou `User Access Administrator` + `Contributor` na assinatura/resource group, pois o Bicep cria role assignments.
-- um recurso Microsoft Foundry no mesmo resource group, com o modelo
-  `text-embedding-3-small` implantado.
+- um recurso Microsoft Foundry no mesmo resource group, com os deployments
+  `text-embedding-3-small` e `gpt-4.1-mini` implantados.
 
 O Docker local não é necessário: o .NET 10 constrói a imagem OCI e a envia diretamente ao Azure Container Registry.
 
@@ -78,7 +81,7 @@ az provider register --namespace Microsoft.CognitiveServices
 
 Copie o `SubscriptionId` mostrado por `az account list`.
 
-## 2. Preparar o modelo de embeddings
+## 2. Preparar os modelos no Foundry
 
 No [portal do Microsoft Foundry](https://ai.azure.com):
 
@@ -88,7 +91,8 @@ No [portal do Microsoft Foundry](https://ai.azure.com):
    deployment;
 4. para o MVP, selecione `GlobalStandard`, capacidade mínima disponível e a
    política `OnceNewDefaultVersionAvailable`;
-5. aguarde o estado **Succeeded**.
+5. repita para `gpt-4.1-mini`, versão `2025-04-14`, usando esse mesmo nome de deployment;
+6. aguarde os dois estados **Succeeded**.
 
 O script recebe apenas o nome do recurso. A chave exibida pelo Foundry não é
 necessária: o Azure AI Search chama o modelo com sua identidade gerenciada e a
@@ -110,8 +114,8 @@ A partir da raiz do repositório:
 O script:
 
 1. cria o resource group;
-2. valida o deployment de embeddings existente no Microsoft Foundry;
-3. implanta o Bicep e conecta o Azure AI Search ao modelo por identidade gerenciada;
+2. valida os deployments de embeddings e chat existentes no Microsoft Foundry;
+3. conecta o Azure AI Search e a Container App aos modelos por identidade gerenciada;
 4. constrói a imagem OCI com o .NET 10 e a envia ao Azure Container Registry;
 5. publica a imagem na Container App;
 6. mostra a URL HTTPS da API e do OpenAPI.
@@ -119,7 +123,7 @@ O script:
 `NamePrefix` deve ter de 3 a 12 caracteres. Os nomes globalmente únicos de Storage, Search e ACR recebem um sufixo determinístico.
 
 > O Azure AI Search Basic e o Log Analytics geram cobrança contínua. O Azure
-> OpenAI cobra pelos tokens usados para gerar embeddings. Para encerrar o MVP,
+> O Foundry cobra pelos tokens usados para embeddings e respostas. Para encerrar o MVP,
 > exclua somente o resource group criado:
 > `az group delete --name rg-blob-search-mvp`.
 
@@ -152,6 +156,7 @@ execute `scripts/deploy.ps1` novamente. Nenhuma alteração no código é necess
 | Container App | Azure AI Search | Search Index Data Contributor |
 | Container App | Azure AI Search | Search Index Data Reader |
 | Container App | ACR | AcrPull |
+| Container App | Microsoft Foundry | Cognitive Services OpenAI User |
 | Azure AI Search | Storage Account | Storage Blob Data Reader |
 | Azure AI Search | Azure OpenAI | Cognitive Services OpenAI User |
 
@@ -235,6 +240,26 @@ enquanto o vetor usa a pergunta completa para reconhecer termos relacionados.
 Resultados apenas vagamente relacionados são removidos e os trechos com maior
 densidade de correspondências aparecem primeiro.
 
+### Conversa RAG
+
+```powershell
+$body = @{
+  message = "O que mudou na release 1.69.1?"
+  history = @()
+} | ConvertTo-Json
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://SUA-API/api/chat" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+O endpoint recupera até cinco trechos, gera uma resposta com citações `[1]`,
+`[2]` e devolve as fontes. A página `/chat` oferece streaming e mantém as últimas
+quatro interações enquanto a aba estiver aberta. Perguntas sem evidência nos
+arquivos são recusadas explicitamente.
+
 ### Upload em lote
 
 ```powershell
@@ -277,14 +302,17 @@ Variáveis de ambiente usam a convenção do ASP.NET Core:
 | `Azure__SkillsetName` | `documents-vector-skillset` |
 | `Azure__OpenAIEndpoint` | `https://recurso.services.ai.azure.com` |
 | `Azure__EmbeddingDeploymentName` | `text-embedding-3-small` |
+| `Azure__ChatDeploymentName` | `gpt-4.1-mini` |
 | `Azure__EmbeddingModelName` | `text-embedding-3-small` |
 | `Azure__EmbeddingDimensions` | `1536` |
+| `Azure__MaximumChatOutputTokens` | `600` |
 | `Azure__MaximumUploadBytes` | `26214400` |
 | `Azure__ManagedIdentityClientId` | client ID da identidade atribuída pelo usuário |
 
 ## Limitações intencionais do MVP
 
-- busca híbrida sem Semantic Ranker e sem respostas geradas por LLM;
+- busca híbrida sem Semantic Ranker;
+- conversa mantida apenas na memória da aba, sem persistência;
 - API pública sem autenticação de usuário;
 - limite padrão de 25 MB por arquivo;
 - limite de 100 arquivos por ZIP, 100 MB compactado e 250 MB descompactado;

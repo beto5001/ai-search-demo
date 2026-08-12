@@ -1,0 +1,239 @@
+@page "/chat"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IDocumentChatService ChatService
+
+<PageTitle>Converse com seus arquivos · Nebula Search</PageTitle>
+
+<section class="chat-hero">
+    <div>
+        <p class="eyebrow"><span></span> RAG conversacional</p>
+        <h1>Converse com seus <em>arquivos.</em></h1>
+        <p>
+            O Nebula encontra os trechos relevantes, compõe uma resposta e mostra exatamente
+            quais documentos sustentam cada conclusão.
+        </p>
+    </div>
+    <button class="new-chat-button" type="button" @onclick="ClearConversation" disabled="@(isSending || messages.Count == 0)">
+        Nova conversa
+    </button>
+</section>
+
+<section class="chat-workspace" aria-label="Conversa com documentos">
+    <aside class="chat-guide">
+        <p class="step-label">Como perguntar</p>
+        <h2>Use linguagem natural</h2>
+        <p>Faça perguntas, peça comparações e continue o assunto sem repetir todo o contexto.</p>
+        <div class="suggestion-list">
+            @foreach (var suggestion in Suggestions)
+            {
+                <button type="button" @onclick="() => SendSuggestionAsync(suggestion)" disabled="@isSending">
+                    @suggestion
+                </button>
+            }
+        </div>
+        <div class="grounding-note">
+            <strong>Resposta fundamentada</strong>
+            <span>Se os arquivos não trouxerem evidência, o Nebula vai dizer que não encontrou.</span>
+        </div>
+    </aside>
+
+    <div class="chat-panel">
+        <div class="chat-messages" aria-live="polite">
+            @if (messages.Count == 0)
+            {
+                <div class="chat-empty">
+                    <span class="chat-empty-mark">N</span>
+                    <h2>O que você quer descobrir?</h2>
+                    <p>Experimente perguntar sobre uma release e depois continue com “e sobre folha de pagamento?”.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var message in messages)
+                {
+                    <article @key="message" class="chat-message @(message.Role == ChatRole.User ? "user" : "assistant")">
+                        <div class="message-avatar">@(message.Role == ChatRole.User ? "Você" : "N")</div>
+                        <div class="message-content">
+                            <strong>@(message.Role == ChatRole.User ? "Você" : "Nebula")</strong>
+                            <p>@message.Content</p>
+
+                            @if (message.Role == ChatRole.Assistant && message.Citations.Count > 0 && !message.IsStreaming)
+                            {
+                                <div class="chat-sources">
+                                    <span class="sources-title">Fontes consultadas</span>
+                                    @foreach (var citation in message.Citations)
+                                    {
+                                        <details class="source-card">
+                                            <summary>
+                                                <b>[@citation.Id] @citation.FileName</b>
+                                                <span>@FormatRelevance(citation.Score)</span>
+                                            </summary>
+                                            <p>@citation.Excerpt</p>
+                                        </details>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </article>
+                }
+            }
+
+            @if (isSending && !string.IsNullOrWhiteSpace(status))
+            {
+                <div class="chat-status"><i></i>@status</div>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="notice error chat-error" role="alert">
+                <span class="notice-dot"></span>
+                <div><strong>A conversa parou</strong><span>@error</span></div>
+            </div>
+        }
+
+        <form class="chat-composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
+            <textarea @bind="draft" @bind:event="oninput" maxlength="2000"
+                      placeholder="Pergunte sobre seus documentos…" aria-label="Mensagem para o Nebula"></textarea>
+            <div>
+                <small>@draft.Length / 2000</small>
+                <button type="submit" disabled="@(isSending || string.IsNullOrWhiteSpace(draft))">
+                    @if (isSending)
+                    {
+                        <span class="spinner dark" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <span>Enviar ↗</span>
+                    }
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+
+@code {
+    private static readonly string[] Suggestions =
+    [
+        "O que mudou na release 1.69.1?",
+        "Compare os ajustes de folha de pagamento entre as releases.",
+        "Qual release adicionou a Carteira TED CashIn?"
+    ];
+
+    private readonly CancellationTokenSource cancellation = new();
+    private readonly List<UiChatMessage> messages = [];
+    private string draft = string.Empty;
+    private string? status;
+    private string? error;
+    private bool isSending;
+
+    private async Task SendSuggestionAsync(string suggestion)
+    {
+        draft = suggestion;
+        await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        if (isSending || string.IsNullOrWhiteSpace(draft))
+        {
+            return;
+        }
+
+        var question = draft.Trim();
+        var history = messages
+            .Where(message => !message.IsStreaming)
+            .Select(message => new ChatTurn(message.Role, message.Content))
+            .TakeLast(ChatRequestPolicy.MaximumHistoryMessages)
+            .ToArray();
+        var assistant = new UiChatMessage(ChatRole.Assistant, string.Empty) { IsStreaming = true };
+
+        messages.Add(new UiChatMessage(ChatRole.User, question));
+        messages.Add(assistant);
+        draft = string.Empty;
+        error = null;
+        isSending = true;
+
+        try
+        {
+            await foreach (var update in ChatService.StreamAsync(
+                               new ChatRequest(question, history),
+                               cancellation.Token))
+            {
+                switch (update.Type)
+                {
+                    case ChatStreamEventType.Status:
+                        status = update.Text;
+                        break;
+                    case ChatStreamEventType.Sources:
+                        assistant.Citations = update.Citations ?? [];
+                        break;
+                    case ChatStreamEventType.Token:
+                        assistant.Content += update.Text;
+                        break;
+                    case ChatStreamEventType.Completed when update.Response is not null:
+                        assistant.Content = update.Response.Answer;
+                        assistant.Citations = update.Response.Citations;
+                        assistant.IsStreaming = false;
+                        status = null;
+                        break;
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            assistant.Content = "Não foi possível concluir esta resposta.";
+            assistant.IsStreaming = false;
+            error = exception.Message;
+        }
+        finally
+        {
+            status = null;
+            isSending = false;
+            TrimConversation();
+        }
+    }
+
+    private void TrimConversation()
+    {
+        var excessMessages = messages.Count - ChatRequestPolicy.MaximumHistoryMessages;
+        if (excessMessages > 0)
+        {
+            messages.RemoveRange(0, excessMessages);
+        }
+    }
+
+    private void ClearConversation()
+    {
+        messages.Clear();
+        error = null;
+        status = null;
+    }
+
+    private static string FormatRelevance(double? score) => score switch
+    {
+        >= 0.03 => "Alta relevância",
+        >= 0.02 => "Boa relevância",
+        _ => "Relacionado"
+    };
+
+    public void Dispose()
+    {
+        cancellation.Cancel();
+        cancellation.Dispose();
+    }
+
+    private sealed class UiChatMessage(ChatRole role, string content)
+    {
+        public ChatRole Role { get; } = role;
+        public string Content { get; set; } = content;
+        public bool IsStreaming { get; set; }
+        public IReadOnlyList<ChatCitation> Citations { get; set; } = [];
+    }
+}

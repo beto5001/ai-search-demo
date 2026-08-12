@@ -20,6 +20,7 @@ dotnet user-secrets set "Azure:StorageAccountUri" "https://$StorageAccountName.b
 dotnet user-secrets set "Azure:StorageResourceId" $StorageResourceId --project $apiProject
 dotnet user-secrets set "Azure:SearchEndpoint" "https://$SearchServiceName.search.windows.net" --project $apiProject
 dotnet user-secrets set "Azure:OpenAIEndpoint" "https://$EmbeddingAccountName.services.ai.azure.com" --project $apiProject
+dotnet user-secrets set "Azure:ChatDeploymentName" "gpt-4.1-mini" --project $apiProject
 
 Write-Host "Configuração local salva em User Secrets."
 Write-Host "Execute: dotnet run --project src/AzureBlobSearch.Api"

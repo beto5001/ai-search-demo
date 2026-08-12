@@ -1,5 +1,6 @@
 using Azure.Core;
 using Azure.Identity;
+using Azure.AI.OpenAI;
 using Azure.Search.Documents;
 using Azure.Search.Documents.Indexes;
 using Azure.Storage.Blobs;
@@ -27,6 +28,7 @@ public static class DependencyInjection
                     && !string.IsNullOrWhiteSpace(options.IndexName)
                     && !string.IsNullOrWhiteSpace(options.SkillsetName)
                     && !string.IsNullOrWhiteSpace(options.EmbeddingDeploymentName)
+                    && !string.IsNullOrWhiteSpace(options.ChatDeploymentName)
                     && options.EmbeddingDimensions > 0,
                 "As configurações de Storage, Azure AI Search e embeddings do Microsoft Foundry são obrigatórias.")
             .ValidateOnStart();
@@ -68,11 +70,22 @@ public static class DependencyInjection
             return new SearchClient(options.SearchEndpoint, options.IndexName, credential);
         });
 
+        services.AddSingleton(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<AzureServicesOptions>>().Value;
+            var credential = provider.GetRequiredService<TokenCredential>();
+            var azureClient = new AzureOpenAIClient(options.OpenAIEndpoint, credential);
+            return azureClient.GetChatClient(options.ChatDeploymentName);
+        });
+
         services.AddSingleton<AzureDocumentService>();
         services.AddSingleton<IDocumentService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddSingleton<IBatchDocumentService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddSingleton<IDocumentSearchService>(provider => provider.GetRequiredService<AzureDocumentService>());
         services.AddSingleton<IReadinessService>(provider => provider.GetRequiredService<AzureDocumentService>());
+        services.AddSingleton<IDocumentRetrievalService, AzureDocumentRetrievalService>();
+        services.AddSingleton<IChatCompletionGateway, AzureOpenAIChatGateway>();
+        services.AddSingleton<IDocumentChatService, DocumentChatService>();
         services.AddHostedService<SearchBootstrapper>();
 
         return services;

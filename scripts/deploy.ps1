@@ -53,6 +53,18 @@ if ($embeddingDeploymentState -ne "Succeeded") {
     throw "O deployment text-embedding-3-small não está pronto (estado: $embeddingDeploymentState)."
 }
 
+$chatDeploymentState = az cognitiveservices account deployment show `
+    --name $EmbeddingAccountName `
+    --resource-group $ResourceGroup `
+    --deployment-name "gpt-4.1-mini" `
+    --query properties.provisioningState `
+    --output tsv
+Assert-LastCommand "validar o deployment gpt-4.1-mini"
+
+if ($chatDeploymentState -ne "Succeeded") {
+    throw "O deployment gpt-4.1-mini não está pronto (estado: $chatDeploymentState)."
+}
+
 $currentImage = az containerapp list `
     --resource-group $ResourceGroup `
     --query "[?name=='$NamePrefix-api'] | [0].properties.template.containers[0].image" `

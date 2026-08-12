@@ -90,6 +90,54 @@ public sealed record SearchPage(
     string? Subject,
     string? Focus);
 
+public enum ChatRole
+{
+    User,
+    Assistant
+}
+
+public sealed record ChatTurn(
+    ChatRole Role,
+    string Content);
+
+public sealed record ChatRequest(
+    string Message,
+    IReadOnlyList<ChatTurn> History);
+
+public sealed record ChatCitation(
+    int Id,
+    string DocumentId,
+    string FileName,
+    string Excerpt,
+    double? Score);
+
+public sealed record ChatResponse(
+    string Answer,
+    string RetrievalQuery,
+    bool Grounded,
+    IReadOnlyList<ChatCitation> Citations);
+
+public enum ChatStreamEventType
+{
+    Status,
+    Sources,
+    Token,
+    Completed
+}
+
+public sealed record ChatStreamEvent(
+    ChatStreamEventType Type,
+    string? Text = null,
+    string? RetrievalQuery = null,
+    IReadOnlyList<ChatCitation>? Citations = null,
+    ChatResponse? Response = null);
+
+public sealed record RetrievedChunk(
+    string DocumentId,
+    string FileName,
+    string Content,
+    double? Score);
+
 public interface IDocumentService
 {
     Task<UploadAccepted> UploadAsync(
@@ -108,6 +156,39 @@ public interface IDocumentSearchService
         string query,
         int page,
         int pageSize,
+        CancellationToken cancellationToken);
+}
+
+public interface IDocumentRetrievalService
+{
+    Task<IReadOnlyList<RetrievedChunk>> RetrieveAsync(
+        string query,
+        int maximumResults,
+        CancellationToken cancellationToken);
+}
+
+public interface IChatCompletionGateway
+{
+    Task<string> ContextualizeAsync(
+        string message,
+        IReadOnlyList<ChatTurn> history,
+        CancellationToken cancellationToken);
+
+    IAsyncEnumerable<string> StreamAnswerAsync(
+        string message,
+        IReadOnlyList<ChatTurn> history,
+        IReadOnlyList<ChatCitation> citations,
+        CancellationToken cancellationToken);
+}
+
+public interface IDocumentChatService
+{
+    IAsyncEnumerable<ChatStreamEvent> StreamAsync(
+        ChatRequest request,
+        CancellationToken cancellationToken);
+
+    Task<ChatResponse> CompleteAsync(
+        ChatRequest request,
         CancellationToken cancellationToken);
 }
 

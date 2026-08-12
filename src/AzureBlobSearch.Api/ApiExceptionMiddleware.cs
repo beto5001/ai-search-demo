@@ -1,6 +1,7 @@
 using Azure;
 using AzureBlobSearch.Application;
 using Microsoft.AspNetCore.Mvc;
+using System.ClientModel;
 
 namespace AzureBlobSearch.Api;
 
@@ -26,7 +27,7 @@ public sealed partial class ApiExceptionMiddleware(
         {
             DocumentTooLargeException =>
                 (StatusCodes.Status413PayloadTooLarge, "Arquivo muito grande", exception.Message),
-            DocumentValidationException or SearchValidationException =>
+            DocumentValidationException or SearchValidationException or ChatValidationException =>
                 (StatusCodes.Status400BadRequest, "Requisição inválida", exception.Message),
             InvalidDataException or OverflowException =>
                 (StatusCodes.Status400BadRequest, "ZIP inválido", "O pacote ZIP está corrompido ou possui metadados inválidos."),
@@ -34,6 +35,10 @@ public sealed partial class ApiExceptionMiddleware(
                 (StatusCodes.Status404NotFound, "Lote não encontrado", exception.Message),
             RequestFailedException requestFailed when requestFailed.Status == 429 =>
                 (StatusCodes.Status429TooManyRequests, "Limite do Azure atingido", requestFailed.Message),
+            ClientResultException clientResult when clientResult.Status == 429 =>
+                (StatusCodes.Status429TooManyRequests, "Limite do modelo atingido", clientResult.Message),
+            ClientResultException =>
+                (StatusCodes.Status503ServiceUnavailable, "Modelo de IA indisponível", exception.Message),
             RequestFailedException =>
                 (StatusCodes.Status503ServiceUnavailable, "Serviço Azure indisponível", exception.Message),
             _ => (StatusCodes.Status500InternalServerError, "Erro interno", "Ocorreu um erro inesperado.")
