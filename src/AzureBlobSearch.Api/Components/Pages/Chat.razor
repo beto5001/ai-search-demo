@@ -94,7 +94,7 @@
         }
 
         <form class="chat-composer" @onsubmit="SendAsync" @onsubmit:preventDefault>
-            <textarea @bind="draft" @bind:event="oninput" maxlength="2000"
+            <textarea value="@draft" @oninput="HandleDraftInput" maxlength="2000"
                       placeholder="Pergunte sobre seus documentos…" aria-label="Mensagem para o Nebula"></textarea>
             <div>
                 <small>@draft.Length / 2000</small>
@@ -132,6 +132,11 @@
     {
         draft = suggestion;
         await SendAsync();
+    }
+
+    private void HandleDraftInput(ChangeEventArgs args)
+    {
+        draft = args.Value?.ToString() ?? string.Empty;
     }
 
     private async Task SendAsync()
