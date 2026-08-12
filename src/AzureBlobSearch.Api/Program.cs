@@ -16,6 +16,10 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+builder.Services.AddAntiforgery(options =>
+{
+    options.Cookie.Name = "__Host-Nebula-Antiforgery-v2";
+});
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(
