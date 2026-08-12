@@ -12,3 +12,12 @@ coverage/
 appsettings.Local.json
 infra/*.parameters.local.json
 .deployment/
+
+# Presentation build and render scratch
+.presentation-work/
+.presentation-temp/
+.montage-temp/
+.slides-test-temp/
+presentation/AzureBlobSearch-3-Fases/
+presentation/*.inspect.ndjson
+presentation/*-montage.png
